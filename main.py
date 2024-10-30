@@ -42,13 +42,20 @@ def marginalize_rows(df_tpm, present_subsystem: str):
     result_df = df_tpm.groupby(new_index).mean()
     return result_df
 
-def marginalize_cols(df_tpm, elements):
-    # filterd_states = df_tpm.colums
-    for elem in elements:
-        df_tpm = df_tpm.groupby(
-            lambda state: state[:elem] + state[elem + 1 :], axis=1
-        ).sum()
-    return df_tpm
+def marginalize_cols(df_tpm, future_subsystem: str):
+    n_bits = len(df_tpm.columns[0])
+    if len(future_subsystem) != n_bits:
+        raise ValueError("invalid future subsystem")
+
+    positions_to_keep = [i for i, bit in enumerate(future_subsystem) if bit == '1']
+
+    def extract_bits(binary_str, positions):
+        return ''.join([binary_str[i] for i in positions])
+
+    new_index = df_tpm.columns.map(lambda x: extract_bits(x, positions_to_keep))
+
+    result_df = df_tpm.T.groupby(new_index).sum()
+    return result_df.T
 
 
 def apply_marginalize(df_tpm, elements):
@@ -71,8 +78,8 @@ df_tpm, states = load_tpm("matrix_guia.csv", len(candidate_system))
 result_df = apply_background(df_tpm, initial_state, candidate_system)
 # print(result_df)
 
-# ABCDE = 5
 result_df = marginalize_rows(result_df, present_subsystem)
-print(result_df)
+# print(result_df)
 
-# result_df = marginalize_rows(result_df, [])
+result_df = marginalize_cols(result_df, future_subsystem)
+print(result_df)
