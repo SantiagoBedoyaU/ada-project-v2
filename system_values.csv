@@ -1,2 +1,2 @@
-initial_state,candidate_system
-1000, 1110
+initial_state,candidate_system, present_subsytem, future_subsystem
+1000, 1110, 1000, 1100
