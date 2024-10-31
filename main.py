@@ -84,17 +84,88 @@ df_tpm, states = load_tpm("matrix_guia.csv", len(candidate_system))
 # print(df_tpm)
 
 result_df = apply_background(df_tpm, initial_state, candidate_system)
-# print(result_df)
+print(result_df)
+
+"""
+    Particiones -> Esto es una funcion que recibe matriz despues de backgroud (result_df(#87)), recibe v
+    present_subsystem = 1000 = A_t
+    future_subsystem = 0000 =  
+    candidate_system = 1100 = A_t, B_t
+
+    v = [A_t, B_t, A_t+1, B_t+1] -> Sale del sistema candidato -> A_t+1 y B_t+1, es futuro del presete
+    W_1 = [A_t] -> es el present_subsystem y el future_subsystem 
+    w' = v - W-1 = [B_t, A_t+1, B_t+1]
+
+    resultados_por_u = {}
+    -> Nota: la llave de resultados_por_u va a ser el elemento u que se itera y su valor
+    va a ser el resultado de la resta de los EMD
+
+    for u in w':
+        iteracion 1 -> u = B_t
+        Paso 1
+        W_1u = W_1 + u = [A_t, B_t] -> Con estas son las que voy a trabajar, las de abajo se marginalizan
+        W_1u' = [C_t, D_t, A_t+1, B_t+1, C_t+1, D_t+1]
+
+        marginalizacionW_1u = [[]]
+        -> marginalizar por filas C_t, D_t
+        -> marginarlizar por columnas A_t+1, B_t+1, C_t+1, D_t+1
+        -> Nota: Todo lo que no este en W_1u, se debe marginalizar
+        
+        Paso 2
+        -> Marginalizo las varibles de W_1u, es decir, trabajo con las variables
+        de W_1u'
+        marginalizacionW_1u' = [[]]
+
+        Paso 3
+        -> Producto tensorial entre marginalizacionW_1u y marginalizacionW_1u
+        resultado_producto = [[]]
+
+        Paso 4
+        -> 1 EMD: Aplicar EMD (lo da la cucha) entre resultado_producto y matriz original (result_df)
+        -> Nota: aplicar EMD en la fila donde este el estado incial, es decir
+        si el estado inicial es 1000, entonces solo debo trabajar con la final que tenga este
+        label tanto en resultado_producto como en la matriz original
+
+        Paso 5
+        u = B_t
+        u' = [A_t, A_t+1, B_t+1]
+        -> 1 Marginalizacion: Voy trabajar con u, es decir, voy a marginalizar las variables de u'
+        -> 2 Margnalizacion: voy a trabajar con u', es decir, voy a marginalizar las variables de u
+
+        -> Producto tensorial entre 1 marginalizacion y 2 marginalizacion
+        -> 2 EMD: Aplicar EMD entre producto_tensorial (paso anterior) y matriz original
+        -> Nota: aplicar EMD en la fila donde este el estado incial, es decir
+        si el estado inicial es 1000, entonces solo debo trabajar con la final que tenga este
+        label tanto en resultado_producto como en la matriz original
+    
+        Paso 6
+        -> Restar al 1 EMD el 2 EMD -> 1EMD - 2EMD
+        -> agregar el resultado de esta resta  a resultados_por_u
+
+        -> Nota: Se hace lo mismo, para el seguiente u, es decir, A_t+1, y asi consecutivamente
+    
+
+    -> Despues de terminar de iterar, obtengo la llave que tenga el minimo valor de las resta
+    de EMD; es decir, obtengo la llave en el que su valor sea el minimo entre todos los valores
+
+    -> Esta llave que obtengo, lo debo agregar a W_1
+    -> Esta llave, debe eliminarse de w'
+
+    -> Importante: Desde la linea 102 (inicio del for) hasta la linea 151, este proceso
+    se repite mientras w' tenga elementos
+    
+"""
+
 
 # result_df = marginalize_rows(result_df, present_subsystem)
 # print(result_df)
 
-df_a = marginalize_cols(result_df, "1000")
-df_b = marginalize_cols(result_df, "0100")
-df_c = marginalize_cols(result_df, "0010")
+# df_a = marginalize_cols(result_df, "1000")
+# df_b = marginalize_cols(result_df, "0100")
+# df_c = marginalize_cols(result_df, "0010")
 
-result_ab = tensor_product(df_a, df_b)
-result_abc = tensor_product(result_ab, df_c)
-print(result_abc)
+# result_ab = tensor_product(df_a, df_b)
+# result_abc = tensor_product(result_ab, df_c)
+# print(result_abc)
 # result_abc = tensor_product(result_ab, df_c)
 # print(result_abc)
