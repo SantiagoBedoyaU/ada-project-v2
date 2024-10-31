@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+from pyemd import emd
+from numpy . typing import NDArray
 import string
 
 
@@ -65,10 +67,31 @@ def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame):
     for df2col in df2.columns:
         for df1col in df1.columns:
             name = f"{df1col}{df2col}"
+
             result[name] = df1[df1col] * df2[df2col]
+            # print(df1[df1col] * df2[df2col])
 
     return result
 
+def EMD(u: NDArray[np.float64], v: NDArray[np.float64]) -> float :
+    """
+    Calculate the Earth Mover's Distance (EMD) between two probability
+    distributions u and v.
+    The Hamming distance was used as the ground metric.
+    """
+    if not all(isinstance(arr, np.ndarray) for arr in [u,v]):
+        raise TypeError("u and v must be numpy arrays.")
+    n: int = len(u)
+    costs : NDArray[np.float64] = np.empty((n,n))
+    for i in range (n):
+        costs [i, :i] = [hamming_distance(i,j) for j in range (i)]
+        costs [:i, i] = costs [i, :i]
+    np.fill_diagonal(costs, 0)
+    cost_matrix : NDArray[np.float64] = np.array(costs, dtype =np.float64)
+    return emd(u, v, cost_matrix)
+
+def hamming_distance (a: int, b: int) -> int:
+    return (a ^ b).bit_count()
 
 [
     initial_state_str,
@@ -107,7 +130,7 @@ result_df = apply_background(df_tpm, initial_state, candidate_system)
         W_1u' = [A_t+1, B_t+1]
 
         marginalizacionW_1u = [[]]
-        -> marginarlizar por columnas A_t+1, B_t+1
+        -> marginarlizar por columnas A_t+1, B_t+1-
         -> Nota: Todo lo que no este en W_1u, se debe marginalizar, este decir
         se marginaliza las variables de W_1u'
         
@@ -155,11 +178,10 @@ result_df = apply_background(df_tpm, initial_state, candidate_system)
     se repite mientras w' tenga elementos
     
 """
-def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str]):
+def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: str):
     w_1 = {list(v.keys())[0]}
     keys = set(list(v.keys()))
     wp = keys - w_1
-
     results_u = {}
     while len(wp) > 0:
         for u in wp:
@@ -167,11 +189,21 @@ def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str]):
             w_1u = w_1.copy()
             w_1up = keys - w_1u
 
-            print(w_1)
-            print(w_1up)
+            # marginalization of w_1
             present, future = set_to_binary(v, w_1up, len(df_tpm.index[0]))
-            marginalizacionW_1u = marginalize_cols(df_tpm, future)
-
+            marginalizacionW_1u = marginalize_rows(df_tpm, present)
+            marginalizacionW_1u = marginalize_cols(marginalizacionW_1u, future)
+            
+            # marginalization of w_1up
+            present, future = set_to_binary(v, w_1, len(df_tpm.index[0]))
+            marginalizacionW_1up = marginalize_rows(df_tpm, present)
+            marginalizacionW_1up = marginalize_cols(marginalizacionW_1up, future)
+            
+            #tensor_product
+            first_product_result = tensor_product(marginalizacionW_1u, marginalizacionW_1up)
+        
+            #EMD 
+            first_EMD_result = EMD(first_product_result.to_numpy(), df_tpm.to_numpy())
             break
         break
 
@@ -202,7 +234,7 @@ def build_v(present_subsystem: str, future_subsystem: str):
     return v
 
 v = build_v(present_subsystem, future_subsystem)
-bipartition_system(result_df, v)
+bipartition_system(result_df, v, initial_state)
 # result_df = marginalize_rows(result_df, present_subsystem)
 # print(result_df)
 
