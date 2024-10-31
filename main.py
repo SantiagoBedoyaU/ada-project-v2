@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import string
 
 
 def load_tpm(filename_tpm: str, num_elements: int):
@@ -84,16 +85,15 @@ df_tpm, states = load_tpm("matrix_guia.csv", len(candidate_system))
 # print(df_tpm)
 
 result_df = apply_background(df_tpm, initial_state, candidate_system)
-print(result_df)
+# print(result_df)
 
 """
     Particiones -> Esto es una funcion que recibe matriz despues de backgroud (result_df(#87)), recibe v
-    present_subsystem = 1000 = A_t
-    future_subsystem = 0000 =  
-    candidate_system = 1100 = A_t, B_t
+    present_subsystem = 1100 = A_t, B_t
+    future_subsystem = 1100 =  A_t+1, B_t+1 
 
     v = [A_t, B_t, A_t+1, B_t+1] -> Sale del sistema candidato -> A_t+1 y B_t+1, es futuro del presete
-    W_1 = [A_t] -> es el present_subsystem y el future_subsystem 
+    W_1 = [A_t] -> Es un elemento de B
     w' = v - W-1 = [B_t, A_t+1, B_t+1]
 
     resultados_por_u = {}
@@ -104,12 +104,12 @@ print(result_df)
         iteracion 1 -> u = B_t
         Paso 1
         W_1u = W_1 + u = [A_t, B_t] -> Con estas son las que voy a trabajar, las de abajo se marginalizan
-        W_1u' = [C_t, D_t, A_t+1, B_t+1, C_t+1, D_t+1]
+        W_1u' = [A_t+1, B_t+1]
 
         marginalizacionW_1u = [[]]
-        -> marginalizar por filas C_t, D_t
-        -> marginarlizar por columnas A_t+1, B_t+1, C_t+1, D_t+1
-        -> Nota: Todo lo que no este en W_1u, se debe marginalizar
+        -> marginarlizar por columnas A_t+1, B_t+1
+        -> Nota: Todo lo que no este en W_1u, se debe marginalizar, este decir
+        se marginaliza las variables de W_1u'
         
         Paso 2
         -> Marginalizo las varibles de W_1u, es decir, trabajo con las variables
@@ -155,8 +155,54 @@ print(result_df)
     se repite mientras w' tenga elementos
     
 """
+def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str]):
+    w_1 = {list(v.keys())[0]}
+    keys = set(list(v.keys()))
+    wp = keys - w_1
 
+    results_u = {}
+    while len(wp) > 0:
+        for u in wp:
+            w_1.add(u)
+            w_1u = w_1.copy()
+            w_1up = keys - w_1u
 
+            print(w_1)
+            print(w_1up)
+            present, future = set_to_binary(v, w_1up, len(df_tpm.index[0]))
+            marginalizacionW_1u = marginalize_cols(df_tpm, future)
+
+            break
+        break
+
+def set_to_binary(v: dict[str, str], set: set[str], label_len:int):
+    abc = string.ascii_lowercase
+    binary_present = list(np.binary_repr(0, label_len))
+    binary_future = list(np.binary_repr(0, label_len))
+    for elem in set:
+        idx = abc.index(elem[0])
+        if 't+1' in elem:
+            binary_future[idx] = '1'        
+        else:
+            binary_present[idx] = '1'
+    
+    return ["".join(binary_present), "".join(binary_future)]
+
+def build_v(present_subsystem: str, future_subsystem: str):
+    v = {}
+    abc = string.ascii_lowercase
+    for idx, bit in enumerate(present_subsystem):
+        if bit == '1':
+            v[f"{abc[idx]}_t"] = '1'
+    
+    for idx, bit in enumerate(future_subsystem):
+        if bit == '1':
+            v[f"{abc[idx]}_t+1"] = '1'
+    
+    return v
+
+v = build_v(present_subsystem, future_subsystem)
+bipartition_system(result_df, v)
 # result_df = marginalize_rows(result_df, present_subsystem)
 # print(result_df)
 
