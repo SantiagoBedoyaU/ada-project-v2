@@ -208,6 +208,7 @@ result_df = apply_background(df_tpm, initial_state, candidate_system)
 
 def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: str):
     w_1 = {list(v.keys())[0]}
+    w_1l = []
     keys = set(list(v.keys()))
     wp = keys - w_1
     results_u = {}
@@ -219,8 +220,8 @@ def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: s
             w_1u = w_1.copy()
             w_1up = keys - w_1u
 
-            print(f"w_1={w_1}")
-            print(f"w_1u={w_1up}")
+            # print(f"w_1={w_1}")
+            # print(f"w_1u={w_1up}")
             """
                 Necesito verificar el valor que tiene el estado inicial
                 con el presente
@@ -232,8 +233,8 @@ def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: s
 
             # marginalization of w_1
             present, future = set_to_binary(v, w_1up, len(df_tpm.index[0]))
-            print(f"present_w1u={present}")
-            print(f"future_w1u={future}")
+            # print(f"present_w1u={present}")
+            # print(f"future_w1u={future}")
             present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
             sorted_idx = sorted(present_idx.keys())
             label = ""
@@ -242,13 +243,13 @@ def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: s
             # print(
             #     f"present={present}, future={future}, w_1up={w_1up}, label={label}, present_idx={present_idx}"
             # )
-            print()
-            print(df_tpm)
-            print()
+            # print()
+            # print(df_tpm)
+            # print()
             marginalizacionW_1u = marginalize_rows(df_tpm, present)
-            print(marginalizacionW_1u)
+            # print(marginalizacionW_1u)
             marginalizacionW_1u = marginalize_cols(marginalizacionW_1u, future)
-            print(marginalizacionW_1u)
+            # print(marginalizacionW_1u)
             # print()
             if len(label) > 0:
                 marginalizacionW_1u = marginalizacionW_1u.loc[label, :]
@@ -262,18 +263,18 @@ def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: s
             for idx in sorted_idx:
                 label += initial_state[idx]
                 
-            print()
-            print()
+            # print()
+            # print()
             
-            print(f"present_w1={present}")
-            print(f"future_w1={future}")
+            # print(f"present_w1={present}")
+            # print(f"future_w1={future}")
             # print(
             #     f"present={present}, future={future}, w_1={w_1}, label={label}, present_idx={present_idx}"
             # )
 
             marginalizacionW_1up = marginalize_rows(df_tpm, present)
             marginalizacionW_1up = marginalize_cols(marginalizacionW_1up, future)
-            print(marginalizacionW_1up)
+            # print(marginalizacionW_1up)
             # print()
             if len(label) > 0:
                 marginalizacionW_1up = marginalizacionW_1up.loc[label, :]
@@ -335,14 +336,22 @@ def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: s
             result_emd = emd1 - emd2
             
             results_u[u] = result_emd
-            wp = wp - {u}
-            w_1.add(u)
-            break
-        break
+            # wp = wp - {u}
+            # w_1.add(u)
+        
+        print(f"{results_u=}")
+        min_result = min(results_u.values())
+        print(f"{min_result=}")
+        key = [key for key, value in results_u.items() if value == min_result][0]
+        print(f"{key=}")
+        wp = wp-{key}
+        w_1.add(key)
+        w_1l.append(key)
+        results_u.clear()
+        print(f"{w_1=}")
+        print(f"{w_1l=}")
+        print()
     
-    # print(f"{results_u=}")
-    # min_result = min(results_u.values())
-    # print(f"{min_result}")
 
 
 def set_to_binary(v: dict[str, str], set: set[str], label_len: int):
