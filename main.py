@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from pyemd import emd
-from numpy . typing import NDArray
+from numpy.typing import NDArray
 import string
 
 
@@ -13,6 +13,7 @@ def load_tpm(filename_tpm: str, num_elements: int):
     df_tpm = pd.DataFrame(tpm, index=states, columns=states)
 
     return df_tpm, states
+
 
 def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
     background_condition = {
@@ -28,6 +29,7 @@ def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
     result_df = df_tpm.loc[filtered_states, filtered_states]
     return result_df
 
+
 def marginalize_rows(df_tpm, present_subsystem: str):
     n_bits = len(df_tpm.index[0])
     if len(present_subsystem) != n_bits:
@@ -38,11 +40,10 @@ def marginalize_rows(df_tpm, present_subsystem: str):
     def extract_bits(binary_str, positions):
         return "".join([binary_str[i] for i in positions])
 
-    result_df = df_tpm
-    if len(positions_to_keep)>0:
-        new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
-        result_df = df_tpm.groupby(new_index).mean()
+    new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
+    result_df = df_tpm.groupby(new_index).mean()
     return result_df
+
 
 def marginalize_cols(df_tpm, future_subsystem: str):
     n_bits = len(df_tpm.columns[0])
@@ -53,45 +54,54 @@ def marginalize_cols(df_tpm, future_subsystem: str):
 
     def extract_bits(binary_str, positions):
         return "".join([binary_str[i] for i in positions])
-    
 
-    result_df = df_tpm
-    if len(positions_to_keep) > 0:
-        new_index = df_tpm.columns.map(lambda x: extract_bits(x, positions_to_keep))
-        result_df = df_tpm.T.groupby(new_index).sum()
-        return result_df.T
-    else:
-        return result_df
+    new_index = df_tpm.columns.map(lambda x: extract_bits(x, positions_to_keep))
+    result_df = df_tpm.T.groupby(new_index).sum()
+    return result_df.T
 
-def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame):
-    result = pd.DataFrame()
-    for df2col in df2.columns:
-        for df1col in df1.columns:
-            name = f"{df1col}{df2col}"
-            result[name] = df1[df1col] * df2[df2col]
-            # print(df1[df1col] * df2[df2col])
+
+def tensor_product(df1: list[float], df2: list[float]):
+    if type(df1[0]) is np.ndarray:
+        df1 = df1[0]
+    if type(df2[0]) is np.ndarray:
+        df2 = df2[0]
+
+    # print(f"df1={df1}, df2={df2}")
+    result = []
+    for df2_elem in df2:
+        for df1_elem in df1:
+            result.append(df1_elem * df2_elem)
+    # result = pd.DataFrame()
+    # for df2col in df2.columns:
+    #     for df1col in df1.columns:
+    #         name = f"{df1col}{df2col}"
+    #         result[name] = df1[df1col] * df2[df2col]
+    #         # print(df1[df1col] * df2[df2col])
 
     return result
 
-def EMD(u: NDArray[np.float64], v: NDArray[np.float64]) -> float :
+
+def EMD(u: NDArray[np.float64], v: NDArray[np.float64]) -> float:
     """
     Calculate the Earth Mover's Distance (EMD) between two probability
     distributions u and v.
     The Hamming distance was used as the ground metric.
     """
-    if not all(isinstance(arr, np.ndarray) for arr in [u,v]):
+    if not all(isinstance(arr, np.ndarray) for arr in [u, v]):
         raise TypeError("u and v must be numpy arrays.")
     n: int = len(u)
-    costs : NDArray[np.float64] = np.empty((n,n))
-    for i in range (n):
-        costs [i, :i] = [hamming_distance(i,j) for j in range (i)]
-        costs [:i, i] = costs [i, :i]
+    costs: NDArray[np.float64] = np.empty((n, n))
+    for i in range(n):
+        costs[i, :i] = [hamming_distance(i, j) for j in range(i)]
+        costs[:i, i] = costs[i, :i]
     np.fill_diagonal(costs, 0)
-    cost_matrix : NDArray[np.float64] = np.array(costs, dtype =np.float64)
+    cost_matrix: NDArray[np.float64] = np.array(costs, dtype=np.float64)
     return emd(u, v, cost_matrix)
 
-def hamming_distance (a: int, b: int) -> int:
+
+def hamming_distance(a: int, b: int) -> int:
     return (a ^ b).bit_count()
+
 
 [
     initial_state_str,
@@ -178,78 +188,160 @@ result_df = apply_background(df_tpm, initial_state, candidate_system)
     se repite mientras w' tenga elementos
     
 """
+
+
 def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: str):
     w_1 = {list(v.keys())[0]}
     keys = set(list(v.keys()))
     wp = keys - w_1
     results_u = {}
+
+    initial_state_values = df_tpm.loc[initial_state, :].values
     while len(wp) > 0:
         for u in wp:
             w_1.add(u)
             w_1u = w_1.copy()
             w_1up = keys - w_1u
 
+            # print(f"intial_state={initial_state}")
+            """
+                Necesito verificar el valor que tiene el estado inicial
+                con el presente
+
+                initial_state = 1000
+                present       = 0100
+
+            """
+
             # marginalization of w_1
             present, future = set_to_binary(v, w_1up, len(df_tpm.index[0]))
-            print(f"present={present}, future={future}, w_1up={w_1up}") 
+            present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
+            sorted_idx = sorted(present_idx.keys())
+            label = ""
+            for idx in sorted_idx:
+                label += initial_state[idx]
+            # print(
+            #     f"present={present}, future={future}, w_1up={w_1up}, label={label}, present_idx={present_idx}"
+            # )
+
             marginalizacionW_1u = marginalize_rows(df_tpm, present)
             marginalizacionW_1u = marginalize_cols(marginalizacionW_1u, future)
-            
-            
+            # print(marginalizacionW_1u)
+            # print()
+            if len(label) > 0:
+                marginalizacionW_1u = marginalizacionW_1u.loc[label, :]
+            # print(marginalizacionW_1u.values)
+
             # marginalization of w_1up
             present, future = set_to_binary(v, w_1, len(df_tpm.index[0]))
-            print(f"present={present}, future={future}, w_1={w_1}")
+            present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
+            sorted_idx = sorted(present_idx.keys())
+            label = ""
+            for idx in sorted_idx:
+                label += initial_state[idx]
+            # print(
+            #     f"present={present}, future={future}, w_1={w_1}, label={label}, present_idx={present_idx}"
+            # )
+
             marginalizacionW_1up = marginalize_rows(df_tpm, present)
             marginalizacionW_1up = marginalize_cols(marginalizacionW_1up, future)
-            
-            #tensor_product
-            # first_product_result = tensor_product(marginalizacionW_1u, marginalizacionW_1up)
-        
-            #EMD 
-            # print(first_product_result.to_numpy())
-            # first_EMD_result = EMD(first_product_result.to_numpy(), df_tpm.to_numpy())
-            # print(first_EMD_result)
-            break
-        break
+            # print(marginalizacionW_1up)
+            # print()
+            if len(label) > 0:
+                marginalizacionW_1up = marginalizacionW_1up.loc[label, :]
+            # print(marginalizacionW_1up.values)
 
-def set_to_binary(v: dict[str, str], set: set[str], label_len:int):
+            # tensor_product
+            first_product_result = tensor_product(
+                marginalizacionW_1u.values, marginalizacionW_1up.values
+            )
+            # print(f"tensor_product={first_product_result}")
+
+            # 1 EMD
+            first_product_result = np.array(first_product_result).astype(np.float64)
+            initial_state_values = np.array(initial_state_values).astype(np.float64)
+            # print(first_product_result)
+            # print(initial_state_values)
+
+            emd1 = EMD(first_product_result, initial_state_values)
+            # print(emd1)
+
+            # print(f"keys={keys}, u={u}")
+            up = keys - {u}
+            present, future = set_to_binary(v, {u}, len(df_tpm.index[0]))
+            present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
+            sorted_idx = sorted(present_idx.keys())
+            label = ""
+            for idx in sorted_idx:
+                label += initial_state[idx]
+            # print(f"u={u}, present={present}, future={future}, label={label}")
+            marginalizacionU = marginalize_rows(df_tpm, present)
+            marginalizacionU = marginalize_cols(marginalizacionU, future)
+            # print(marginalizacionU)
+            if len(label) > 0:
+                marginalizacionU = marginalizacionU.loc[label, :]
+
+            # print()
+            present, future = set_to_binary(v, up, len(df_tpm.index[0]))
+            present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
+            sorted_idx = sorted(present_idx.keys())
+            label = ""
+            for idx in sorted_idx:
+                label += initial_state[idx]
+            # print(f"u={up}, present={present}, future={future}, label={label}")
+            marginalizacionUp = marginalize_rows(df_tpm, present)
+            marginalizacionUp = marginalize_cols(marginalizacionUp, future)
+            # print(marginalizacionUp)
+            if len(label) > 0:
+                marginalizacionUp = marginalizacionUp.loc[label, :]
+
+            second_product_result = tensor_product(
+                marginalizacionU.values, marginalizacionUp.values
+            )
+            # print(f"{second_product_result=}")
+
+            second_product_result = np.array(second_product_result).astype(np.float64)
+            emd2 = EMD(second_product_result, initial_state_values)
+
+            # print(f"{emd1=}, {emd2=}")
+            result_emd = emd1 - emd2
+            
+            results_u[u] = result_emd
+            wp = wp - {u}
+            w_1.add(u)
+    
+    print(f"{results_u=}")
+    min_result = min(results_u.values())
+    print(f"{min_result}")
+
+
+def set_to_binary(v: dict[str, str], set: set[str], label_len: int):
     abc = string.ascii_lowercase
     binary_present = list(np.binary_repr(0, label_len))
     binary_future = list(np.binary_repr(0, label_len))
     for elem in set:
         idx = abc.index(elem[0])
-        if 't+1' in elem:
-            binary_future[idx] = '1'        
+        if "t+1" in elem:
+            binary_future[idx] = "1"
         else:
-            binary_present[idx] = '1'
-    
+            binary_present[idx] = "1"
+
     return ["".join(binary_present), "".join(binary_future)]
 
-def build_v(present_subsystem: str, future_subsystem: str):
+
+def build_v(candidate_system: str):
     v = {}
     abc = string.ascii_lowercase
-    for idx, bit in enumerate(present_subsystem):
-        if bit == '1':
-            v[f"{abc[idx]}_t"] = '1'
-    
-    for idx, bit in enumerate(future_subsystem):
-        if bit == '1':
-            v[f"{abc[idx]}_t+1"] = '1'
-    
+    for idx, bit in enumerate(candidate_system):
+        if bit == "1":
+            v[f"{abc[idx]}_t"] = "1"
+
+    for idx, bit in enumerate(candidate_system):
+        if bit == "1":
+            v[f"{abc[idx]}_t+1"] = "1"
+
     return v
 
 
-v = build_v(present_subsystem, future_subsystem)
+v = build_v(candidate_system)
 bipartition_system(result_df, v, initial_state)
-# result_df = marginalize_rows(result_df, present_subsystem)
-# print(result_df)
-
-# df_a = marginalize_rows(result_df, "0000")
-# df_b = marginalize_cols(result_df, "0100")
-# df_c = marginalize_cols(result_df, "0010")
-
-# result_ab = tensor_product(df_a, df_b)
-# result_abc = tensor_product(result_ab, df_c)
-# print(result_abc)
-# result_abc = tensor_product(result_ab, df_c)
-# print(result_abc)
