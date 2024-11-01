@@ -14,8 +14,7 @@ def load_tpm(filename_tpm: str, num_elements: int):
 
     return df_tpm, states
 
-
-def apply_background(df_tpm, initial_state, candidate_system):
+def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
     background_condition = {
         idx: initial_state[idx]
         for idx, bit in enumerate(candidate_system)
@@ -29,7 +28,6 @@ def apply_background(df_tpm, initial_state, candidate_system):
     result_df = df_tpm.loc[filtered_states, filtered_states]
     return result_df
 
-
 def marginalize_rows(df_tpm, present_subsystem: str):
     n_bits = len(df_tpm.index[0])
     if len(present_subsystem) != n_bits:
@@ -40,11 +38,11 @@ def marginalize_rows(df_tpm, present_subsystem: str):
     def extract_bits(binary_str, positions):
         return "".join([binary_str[i] for i in positions])
 
-    new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
-
-    result_df = df_tpm.groupby(new_index).mean()
+    result_df = df_tpm
+    if len(positions_to_keep)>0:
+        new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
+        result_df = df_tpm.groupby(new_index).mean()
     return result_df
-
 
 def marginalize_cols(df_tpm, future_subsystem: str):
     n_bits = len(df_tpm.columns[0])
@@ -55,19 +53,21 @@ def marginalize_cols(df_tpm, future_subsystem: str):
 
     def extract_bits(binary_str, positions):
         return "".join([binary_str[i] for i in positions])
+    
 
-    new_index = df_tpm.columns.map(lambda x: extract_bits(x, positions_to_keep))
-
-    result_df = df_tpm.T.groupby(new_index).sum()
-    return result_df.T
-
+    result_df = df_tpm
+    if len(positions_to_keep) > 0:
+        new_index = df_tpm.columns.map(lambda x: extract_bits(x, positions_to_keep))
+        result_df = df_tpm.T.groupby(new_index).sum()
+        return result_df.T
+    else:
+        return result_df
 
 def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame):
     result = pd.DataFrame()
     for df2col in df2.columns:
         for df1col in df1.columns:
             name = f"{df1col}{df2col}"
-
             result[name] = df1[df1col] * df2[df2col]
             # print(df1[df1col] * df2[df2col])
 
@@ -191,19 +191,24 @@ def bipartition_system(df_tpm: pd.DataFrame, v: dict[str, str], initial_state: s
 
             # marginalization of w_1
             present, future = set_to_binary(v, w_1up, len(df_tpm.index[0]))
+            print(f"present={present}, future={future}, w_1up={w_1up}") 
             marginalizacionW_1u = marginalize_rows(df_tpm, present)
             marginalizacionW_1u = marginalize_cols(marginalizacionW_1u, future)
             
+            
             # marginalization of w_1up
             present, future = set_to_binary(v, w_1, len(df_tpm.index[0]))
+            print(f"present={present}, future={future}, w_1={w_1}")
             marginalizacionW_1up = marginalize_rows(df_tpm, present)
             marginalizacionW_1up = marginalize_cols(marginalizacionW_1up, future)
             
             #tensor_product
-            first_product_result = tensor_product(marginalizacionW_1u, marginalizacionW_1up)
+            # first_product_result = tensor_product(marginalizacionW_1u, marginalizacionW_1up)
         
             #EMD 
-            first_EMD_result = EMD(first_product_result.to_numpy(), df_tpm.to_numpy())
+            # print(first_product_result.to_numpy())
+            # first_EMD_result = EMD(first_product_result.to_numpy(), df_tpm.to_numpy())
+            # print(first_EMD_result)
             break
         break
 
@@ -233,12 +238,13 @@ def build_v(present_subsystem: str, future_subsystem: str):
     
     return v
 
+
 v = build_v(present_subsystem, future_subsystem)
 bipartition_system(result_df, v, initial_state)
 # result_df = marginalize_rows(result_df, present_subsystem)
 # print(result_df)
 
-# df_a = marginalize_cols(result_df, "1000")
+# df_a = marginalize_rows(result_df, "0000")
 # df_b = marginalize_cols(result_df, "0100")
 # df_c = marginalize_cols(result_df, "0010")
 
