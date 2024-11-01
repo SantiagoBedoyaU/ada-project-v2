@@ -42,11 +42,24 @@ def marginalize_rows(df_tpm, present_subsystem: str):
 
     new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
     result_df = df_tpm.groupby(new_index).mean()
-    sorted_index = sorted(result_df.index, key=lambda x: int(x[::-1], 2))
-    result_df = result_df.reindex(sorted_index)
-    # print(df_tpm.groupby(new_index).groups)
-    return result_df
+    return reorder_little_endian(result_df)
 
+def reorder_little_endian(df):
+    def bin_to_little_endian(bin_str):
+        if not bin_str or not isinstance(bin_str, str):
+            return 0
+        bin_str = bin_str.strip()
+        if not all(c in '01' for c in bin_str):
+            return 0
+        return int(bin_str[::-1], 2)  # Invertir string y convertir a entero base 2
+    
+    if df.empty:
+        return df
+    row_map = {idx: bin_to_little_endian(str(idx)) for idx in df.index}
+    new_row_order = pd.Series(row_map).sort_values()
+    col_map = {col: bin_to_little_endian(str(col)) for col in df.columns}
+    new_col_order = pd.Series(col_map).sort_values()
+    return df.reindex(index=new_row_order.index, columns=new_col_order.index)
 
 def marginalize_cols(df_tpm, future_subsystem: str):
     n_bits = len(df_tpm.columns[0])
@@ -60,7 +73,7 @@ def marginalize_cols(df_tpm, future_subsystem: str):
 
     new_index = df_tpm.columns.map(lambda x: extract_bits(x, positions_to_keep))
     result_df = df_tpm.T.groupby(new_index).sum()
-    return result_df.T
+    return reorder_little_endian(result_df.T)
 
 
 def tensor_product(df1: list[float], df2: list[float]):
