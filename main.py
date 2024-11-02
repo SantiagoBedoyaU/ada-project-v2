@@ -11,7 +11,17 @@ def load_tpm(filename_tpm: str, num_elements: int):
     )
     tpm = np.loadtxt(filename_tpm, delimiter=",")
     df_tpm = pd.DataFrame(tpm, index=states, columns=states)
+    return df_tpm, states
 
+def load_tpm_2(filename_tpm: str, num_elements: int):
+    states = pd.Index(
+        [np.binary_repr(i, width=num_elements)[::-1] for i in range(2**num_elements)]
+    )
+    tpm = np.loadtxt(filename_tpm, delimiter=",")
+    columns = pd.Index(
+        [np.binary_repr(i, width=1)[::-1] for i in range(2)]
+    )
+    df_tpm = pd.DataFrame(tpm, index=states, columns=columns)
     return df_tpm, states
 
 
@@ -89,15 +99,17 @@ def tensor_product(df1: list[float], df2: list[float]):
     for df2_elem in df2:
         for df1_elem in df1:
             result.append(df1_elem * df2_elem)
-    # result = pd.DataFrame()
-    # for df2col in df2.columns:
-    #     for df1col in df1.columns:
-    #         name = f"{df1col}{df2col}"
-    #         result[name] = df1[df1col] * df2[df2col]
-    #         # print(df1[df1col] * df2[df2col])
-
     return result
 
+
+def tensor_product_of_matrix(df1: pd.DataFrame, df2: pd.DataFrame):
+    result = pd.DataFrame()
+    for df2col in df2.columns:
+        for df1col in df1.columns:
+            name = f"{df1col}{df2col}"
+            result[name] = df1[df1col] * df2[df2col]
+            # print(df1[df1col] * df2[df2col])
+    return result
 
 def EMD(u: NDArray[np.float64], v: NDArray[np.float64]) -> float:
     """
@@ -305,6 +317,8 @@ def bipartition_system(
 
             # print(f"keys={keys}, u={u}")
             up = [item for item in v if item not in [u]]
+            # print([u])
+            # print(up)
             present, future = set_to_binary([u], len(df_tpm.index[0]))
             present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
             sorted_idx = sorted(present_idx.keys())
@@ -360,6 +374,10 @@ def bipartition_system(
         wp.remove(key)
         w_1.append(key)
         w_1l.append(key)
+        # print(results_u)
+        # print(w_1)
+        # print(w_1l)
+        # print()
 
         # print(w_1l)
         results_u.clear()
@@ -409,6 +427,14 @@ def set_to_binary(set: list, label_len: int):
 
     return ["".join(binary_present), "".join(binary_future)]
 
+def get_matrices_node_state(df_tpm: pd.DataFrame):
+    matrices_node_state = {}
+    string = '0' * len(df_tpm.index[0])
+    for i in range(len(df_tpm.index[0])):
+        future = string[:i] + '1' + string[i+1:]
+        matrix = marginalize_cols(df_tpm.copy(), future)
+        matrices_node_state[future] = matrix
+    return matrices_node_state
 
 def build_v(candidate_system: str):
     v = []
@@ -423,6 +449,18 @@ def build_v(candidate_system: str):
 
     return v
 
+def build_v_2(present_subsystem: str, future_subsystem: str):
+    v = []
+    abc = string.ascii_lowercase
+    for idx, bit in enumerate(present_subsystem):
+        if bit == "1":
+            v.append(f"{abc[idx]}_t")
+
+    for idx, bit in enumerate(future_subsystem):
+        if bit == "1":
+            v.append(f"{abc[idx]}_t+1")
+
+    return v
 
 def min_EMD(df_tpm: pd.DataFrame, v: list[str], bipartion_list: list[str], initial_state: str):
     initial_state_values = df_tpm.loc[initial_state, :].values
@@ -471,7 +509,7 @@ def min_EMD(df_tpm: pd.DataFrame, v: list[str], bipartion_list: list[str], initi
         tensor_result = np.array(tensor_result).astype(np.float64)
         emd = EMD(tensor_result, initial_state_values)
         emd_results[tuple(elem)] = emd
-
+    # print(emd_results)
     min_emd_result = min(emd_results.values())
     min_emd_key = [key for key, value in emd_results.items() if value == min_emd_result][0]
     return [min_emd_key, min_emd_result]
@@ -491,3 +529,49 @@ print(f"{min_emd_key=}, {min_emd_result=}")
 # f.append(example[-2:])
 
 # print(f)
+
+
+##############################################
+# Casos de prueba
+##############################################
+
+# [
+#     initial_state_str,
+#     candidate_system_str,
+#     present_subsystem_str,
+#     future_subsystem_str,
+# ] = np.loadtxt("system_values_2.csv", delimiter=",", skiprows=1, dtype=str)
+# initial_state = initial_state_str.strip()
+# candidate_system = candidate_system_str.strip()
+# # print(candidate_system)
+# present_subsystem = present_subsystem_str.strip()
+# future_subsystem = future_subsystem_str.strip()
+# matrix_1, states = load_tpm_2('matrix_guia_2.csv', len(candidate_system))
+# matrix_2, states  = load_tpm_2('matrix_guia_3.csv', len(candidate_system))
+# matrix_3, states  = load_tpm_2('matrix_guia_4.csv', len(candidate_system))
+# matrix_4, states  = load_tpm_2('matrix_guia_5.csv', len(candidate_system))
+# matrix_5, states  = load_tpm_2('matrix_guia_6.csv', len(candidate_system))
+# tensor_flow = tensor_product_of_matrix(matrix_1, matrix_2)
+# tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
+# tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
+# tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
+
+
+# df_tpm= apply_background(tensor_flow, initial_state, candidate_system)
+# print(df_tpm)
+
+# node_states = get_matrices_node_state(df_tpm)
+# print(node_states['00001'])
+
+# v = build_v_2(present_subsystem, future_subsystem)
+# print(v)
+
+# Marginalizacion a los subsistemas:
+# df_tpm= marginalize_cols(df_tpm, '11011')
+# print(df_tpm)
+
+# candidates_bipartition = []
+# candidate_bipartitions = bipartition_system(df_tpm.copy(), v.copy(), initial_state, candidates_bipartition)
+# print(f"{candidate_bipartitions=}")
+# [min_emd_key, min_emd_result] = min_EMD(df_tpm.copy(), v, candidate_bipartitions, initial_state)
+# print(f"{min_emd_key=}, {min_emd_result=}")
