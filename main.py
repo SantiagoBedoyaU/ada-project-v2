@@ -37,6 +37,19 @@ def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
         if all(state[i] == bit for i, bit in background_condition.items())
     ]
     result_df = df_tpm.loc[filtered_states, filtered_states]
+    
+    # print(background_condition)
+    cut_filtered_states = []
+    for state in result_df.index:
+        state_list = list(state)
+        for i in sorted(background_condition.keys(), reverse=True):
+            state_list.pop(i)
+        cut_filtered_states.append("".join(state_list))
+    
+    # print(f"{cut_filtered_states=}")
+
+    result_df.index = pd.Index(cut_filtered_states)
+    result_df.columns = pd.Index(cut_filtered_states)
     return result_df
 
 
@@ -88,7 +101,7 @@ def marginalize_cols(df_tpm, future_subsystem: str):
     return reorder_little_endian(result_df.T)
 
 
-def tensor_product(df1: list[float], df2: list[float]):
+def tensor_product(df1: list[float], df2: list[float]): 
     if type(df1[0]) is np.ndarray:
         df1 = df1[0]
     if type(df2[0]) is np.ndarray:
@@ -132,23 +145,38 @@ def EMD(u: NDArray[np.float64], v: NDArray[np.float64]) -> float:
 def hamming_distance(a: int, b: int) -> int:
     return (a ^ b).bit_count()
 
+def puta_function(df_tpm: pd.DataFrame, present: str, future: str, node_state:dict, initial_state:str):
+    results_node_states = []
+    present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
+    sorted_idx = sorted(present_idx.keys())
+    label = ""
+    for idx in sorted_idx:
+        label += initial_state[idx]
+    if '1' in future:
+        for idx, bit in enumerate(future):
+            if bit == '1':
+                a = node_state[idx]
+                result_a = marginalize_rows(a.copy(), present)
+                if len(label) > 0:
+                    result_a = result_a.loc[[label], :]
+                results_node_states.append(result_a)
+    
+        for i in range(1, len(results_node_states)):
+            first = results_node_states[i-1]
+            second = results_node_states[i]
+            
+            results_node_states[i] = tensor_product_of_matrix(first, second)
 
-[
-    initial_state_str,
-    candidate_system_str,
-    present_subsystem_str,
-    future_subsystem_str,
-] = np.loadtxt("system_values.csv", delimiter=",", skiprows=1, dtype=str)
-initial_state = initial_state_str.strip()
-candidate_system = candidate_system_str.strip()
-present_subsystem = present_subsystem_str.strip()
-future_subsystem = future_subsystem_str.strip()
+        if len(results_node_states) > 0:
+            marginalizacion = results_node_states[-1]
+    else:
+        # print("future-----------", future)
+        marginalizacion = marginalize_cols(df_tpm, future)
+        marginalizacion = marginalize_rows(marginalizacion, present)
+        if len(label) > 0:
+            marginalizacion = marginalizacion.loc[label, :]
 
-df_tpm, states = load_tpm("matrix_guia.csv", len(candidate_system))
-# print(df_tpm)
-
-result_df = apply_background(df_tpm, initial_state, candidate_system)
-# print(result_df)
+    return marginalizacion 
 
 """
     Particiones -> Esto es una funcion que recibe matriz despues de backgroud (result_df(#87)), recibe v
@@ -218,10 +246,8 @@ result_df = apply_background(df_tpm, initial_state, candidate_system)
     se repite mientras w' tenga elementos
     
 """
-
-
 def bipartition_system(
-    df_tpm: pd.DataFrame, v: list, initial_state: str, candidates_bipartition: list
+    df_tpm: pd.DataFrame, v: list, initial_state: str, candidates_bipartition: list, node_state: dict
 ):
     if len(v) <= 2:
         candidates_bipartition.append(v[-1])
@@ -232,7 +258,10 @@ def bipartition_system(
 
     results_u = {}
 
-    initial_state_values = df_tpm.loc[initial_state, :].values
+    initial_state_v, future = set_to_binary(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+    # print(f"{present=}, {future=}")
+    initial_state_values = df_tpm.loc[initial_state_v, :].values
+    # print(f"{initial_state_values=}")
     while len(wp) > 0:
         for u in wp:
             # print(w_1)
@@ -240,124 +269,40 @@ def bipartition_system(
             w_1u.append(u)
             w_1up = [item for item in v if item not in w_1u]
 
-            # print(f"w_1u={w_1u}")
-            # print(f"w_1up={w_1up}")
-            """
-                Necesito verificar el valor que tiene el estado inicial
-                con el presente
-
-                initial_state = 1000
-                present       = 0100
-
-            """
-
-            # marginalization of w_1
-            present, future = set_to_binary(w_1up, len(df_tpm.index[0]))
-            # print(f"present_w1up={present}")
-            # print(f"future_w1up={future}")
-            present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
-            sorted_idx = sorted(present_idx.keys())
-            label = ""
-            for idx in sorted_idx:
-                label += initial_state[idx]
-            # print(
-            #     f"present={present}, future={future}, w_1up={w_1up}, label={label}, present_idx={present_idx}"
-            # )
-            # print()
-            # print(df_tpm)
-            # print()
-            marginalizacionW_1u = marginalize_rows(df_tpm, present)
-            # print(marginalizacionW_1u)
-            marginalizacionW_1u = marginalize_cols(marginalizacionW_1u, future)
-            # print(marginalizacionW_1u)
-            # print()
-            if len(label) > 0:
-                marginalizacionW_1u = marginalizacionW_1u.loc[label, :]
-            # print(marginalizacionW_1u.values)
+            # marginalization of W_1u
+            present, future = set_to_binary(w_1up, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+            marginalizacionW_1u = puta_function(df_tpm, present, future, node_state, initial_state)
 
             # marginalization of w_1up
-            present, future = set_to_binary(w_1u, len(df_tpm.index[0]))
-            present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
-            sorted_idx = sorted(present_idx.keys())
-            label = ""
-            for idx in sorted_idx:
-                label += initial_state[idx]
-
-            # print()
-            # print()
-
-            # print(f"present_w1u={present}")
-            # print(f"future_w1u={future}")
-            # print(
-            #     f"present={present}, future={future}, w_1={w_1}, label={label}, present_idx={present_idx}"
-            # )
-
-            marginalizacionW_1up = marginalize_rows(df_tpm, present)
-            marginalizacionW_1up = marginalize_cols(marginalizacionW_1up, future)
-            # print(marginalizacionW_1up)
-            # print()
-            if len(label) > 0:
-                marginalizacionW_1up = marginalizacionW_1up.loc[label, :]
-            # print(marginalizacionW_1up.values)
+            present, future = set_to_binary(w_1u, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+            marginalizacionW_1up = puta_function(df_tpm, present, future, node_state, initial_state)
 
             # tensor_product
             first_product_result = tensor_product(
                 marginalizacionW_1u.values, marginalizacionW_1up.values
             )
-            # print(f"tensor_product={first_product_result}")
 
             # 1 EMD
             first_product_result = np.array(first_product_result).astype(np.float64)
             initial_state_values = np.array(initial_state_values).astype(np.float64)
-            # print(first_product_result)
-            # print(initial_state_values)
-
             emd1 = EMD(first_product_result, initial_state_values)
-            # print(emd1)
 
-            # print(f"keys={keys}, u={u}")
             up = [item for item in v if item not in [u]]
-            # print([u])
-            # print(up)
-            present, future = set_to_binary([u], len(df_tpm.index[0]))
-            present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
-            sorted_idx = sorted(present_idx.keys())
-            label = ""
-            for idx in sorted_idx:
-                label += initial_state[idx]
-            # print(f"u={u}, present={present}, future={future}, label={label}")
-            marginalizacionU = marginalize_rows(df_tpm, present)
-            marginalizacionU = marginalize_cols(marginalizacionU, future)
-            # print(marginalizacionU)
-            if len(label) > 0:
-                marginalizacionU = marginalizacionU.loc[label, :]
+            
+            present, future = set_to_binary([u], len(df_tpm.index[0]), len(df_tpm.columns[0]))
+            marginalizacionU = puta_function(df_tpm, present, future, node_state, initial_state)
 
-            # print()
-            present, future = set_to_binary(up, len(df_tpm.index[0]))
-            present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
-            sorted_idx = sorted(present_idx.keys())
-            label = ""
-            for idx in sorted_idx:
-                label += initial_state[idx]
-            # print(f"u={up}, present={present}, future={future}, label={label}")
-            marginalizacionUp = marginalize_rows(df_tpm, present)
-            marginalizacionUp = marginalize_cols(marginalizacionUp, future)
-            # print(marginalizacionUp)
-            if len(label) > 0:
-                marginalizacionUp = marginalizacionUp.loc[label, :]
+            present, future = set_to_binary(up, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+            marginalizacionUp = puta_function(df_tpm, present, future, node_state, initial_state)
 
             second_product_result = tensor_product(
                 marginalizacionU.values, marginalizacionUp.values
             )
-            # print(f"{second_product_result=}")
 
             second_product_result = np.array(second_product_result).astype(np.float64)
             emd2 = EMD(second_product_result, initial_state_values)
 
-            # print(f"{emd1=}, {emd2=}")
             result_emd = emd1 - emd2
-            # diferencia_str = format(result_emd, '.20f')
-            # print("Diferencia:", diferencia_str)
 
             if isinstance(u, list):
                 results_u[tuple(u)] = result_emd
@@ -374,16 +319,8 @@ def bipartition_system(
         wp.remove(key)
         w_1.append(key)
         w_1l.append(key)
-        # print(results_u)
-        # print(w_1)
-        # print(w_1l)
-        # print()
 
-        # print(w_1l)
         results_u.clear()
-        # print(f"{w_1=}")
-        # print(f"{w_1l=}")
-        # print()
     candidates_bipartition.append(w_1l[-1])
     v.remove(w_1l[-1])
     v.remove(w_1l[-2])
@@ -397,18 +334,16 @@ def bipartition_system(
         v.append(w_1l[-1] + [w_1l[-2]])
     else:
         v.append([w_1l[-1], w_1l[-2]])
-    # print(v)
-    # print(w_1l)
+    
     candidates_bipartition = bipartition_system(
-        df_tpm, v, initial_state, candidates_bipartition
+        df_tpm, v, initial_state, candidates_bipartition, node_state
     )
     return candidates_bipartition
 
-
-def set_to_binary(set: list, label_len: int):
+def set_to_binary(set: list, present_label_len: int, future_label_len:int):
     abc = string.ascii_lowercase
-    binary_present = list(np.binary_repr(0, label_len))
-    binary_future = list(np.binary_repr(0, label_len))
+    binary_present = list(np.binary_repr(0, present_label_len))
+    binary_future = list(np.binary_repr(0, future_label_len))
 
     for elem in set:
         if isinstance(elem, list):
@@ -429,27 +364,25 @@ def set_to_binary(set: list, label_len: int):
 
 def get_matrices_node_state(df_tpm: pd.DataFrame):
     matrices_node_state = {}
-    string = '0' * len(df_tpm.index[0])
-    for i in range(len(df_tpm.index[0])):
+    string = '0' * len(df_tpm.columns[0])
+    for i in range(len(df_tpm.columns[0])):
         future = string[:i] + '1' + string[i+1:]
         matrix = marginalize_cols(df_tpm.copy(), future)
-        matrices_node_state[future] = matrix
+        matrices_node_state[i] = matrix
     return matrices_node_state
 
-def build_v(candidate_system: str):
-    v = []
-    abc = string.ascii_lowercase
-    for idx, bit in enumerate(candidate_system):
-        if bit == "1":
-            v.append(f"{abc[idx]}_t")
+# def build_v(candidate_system: str):
+#     v = []
+#     abc = string.ascii_lowercase
+#     for idx, bit in enumerate(candidate_system):
+#         if bit == "1":
+#             v.append(f"{abc[idx]}_t")
+#     for idx, bit in enumerate(candidate_system):
+#         if bit == "1":
+#             v.append(f"{abc[idx]}_t+1")
+#     return v
 
-    for idx, bit in enumerate(candidate_system):
-        if bit == "1":
-            v.append(f"{abc[idx]}_t+1")
-
-    return v
-
-def build_v_2(present_subsystem: str, future_subsystem: str):
+def build_v(present_subsystem: str, future_subsystem: str):
     v = []
     abc = string.ascii_lowercase
     for idx, bit in enumerate(present_subsystem):
@@ -478,7 +411,7 @@ def min_EMD(df_tpm: pd.DataFrame, v: list[str], bipartion_list: list[str], initi
             elemP = [e for e in v if e != elem]
         # print(f"{elemP=}")
         
-        presentElem, futureElem = set_to_binary([elem], len(df_tpm.index[0]))
+        presentElem, futureElem = set_to_binary([elem], len(df_tpm.index[0]), len(df_tpm.columns[0]))
         present_idx = {idx: bit for idx, bit in enumerate(presentElem) if bit == "1"}
         sorted_idx = sorted(present_idx.keys())
         label = ""
@@ -492,7 +425,7 @@ def min_EMD(df_tpm: pd.DataFrame, v: list[str], bipartion_list: list[str], initi
 
         # print(f"{marginalizacionElem}")
 
-        presentElemP, futureElemP = set_to_binary([elemP], len(df_tpm.index[0]))
+        presentElemP, futureElemP = set_to_binary([elemP], len(df_tpm.index[0]), len(df_tpm.columns[0]))
         present_idx = {idx: bit for idx, bit in enumerate(presentElemP) if bit == "1"}
         sorted_idx = sorted(present_idx.keys())
         label = ""
@@ -515,14 +448,45 @@ def min_EMD(df_tpm: pd.DataFrame, v: list[str], bipartion_list: list[str], initi
     return [min_emd_key, min_emd_result]
 
 
-v = build_v(candidate_system)
-print(f"{v=}")
-candidates_bipartition = []
-# print(result_df)
-candidate_bipartitions = bipartition_system(result_df.copy(), v.copy(), initial_state, candidates_bipartition)
-print(f"{candidate_bipartitions=}")
-[min_emd_key, min_emd_result] = min_EMD(result_df, v, candidate_bipartitions, initial_state)
-print(f"{min_emd_key=}, {min_emd_result=}")
+def main():
+    [
+        initial_state_str,
+        candidate_system_str,
+        present_subsystem_str,
+        future_subsystem_str,
+    ] = np.loadtxt("system_values.csv", delimiter=",", skiprows=1, dtype=str)
+    initial_state = initial_state_str.strip()
+    candidate_system = candidate_system_str.strip()
+    present_subsystem = present_subsystem_str.strip()
+    future_subsystem = future_subsystem_str.strip()
+
+    df_tpm, states = load_tpm("matrix_guia.csv", len(candidate_system))
+    # print(df_tpm)
+    result_df = apply_background(df_tpm, initial_state, candidate_system)
+
+    v = build_v(present_subsystem, future_subsystem)
+    print(f"{v=}")
+
+    present, future = set_to_binary(v, len(result_df.index[0]), len(result_df.columns[0]))
+    result_df = marginalize_cols(result_df, future)
+    result_df = marginalize_rows(result_df, present)
+
+    node_state = get_matrices_node_state(result_df)
+    
+    # print(f"{initial_state=}")
+    candidates_bipartition = []
+    candidate_bipartitions = bipartition_system(result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_state)
+    print(f"{candidate_bipartitions=}")
+
+    print(result_df)
+    initial_state_v, _ = set_to_binary(v, len(result_df.index[0]), len(df_tpm.columns[0]))
+    [min_emd_key, min_emd_result] = min_EMD(result_df, v, candidate_bipartitions, initial_state_v)
+    print(f"{min_emd_key=}, {min_emd_result=}")
+
+
+
+main()
+
 
 # f = []
 # example = ['1','2', ['1','2'], ['1', '2']]
@@ -557,21 +521,25 @@ print(f"{min_emd_key=}, {min_emd_result=}")
 # tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
 
 
+# print(f"{initial_state=}, {candidate_system=}")
 # df_tpm= apply_background(tensor_flow, initial_state, candidate_system)
 # print(df_tpm)
 
-# node_states = get_matrices_node_state(df_tpm)
-# print(node_states['00001'])
-
-# v = build_v_2(present_subsystem, future_subsystem)
+# v = build_v(present_subsystem, future_subsystem)
 # print(v)
 
-# Marginalizacion a los subsistemas:
-# df_tpm= marginalize_cols(df_tpm, '11011')
-# print(df_tpm)
+# present, future = set_to_binary(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+# result_df = marginalize_cols(df_tpm, future)
+# result_df = marginalize_rows(result_df, present)
+
+# print(result_df)
+# node_states = get_matrices_node_state(result_df)
+
+
 
 # candidates_bipartition = []
-# candidate_bipartitions = bipartition_system(df_tpm.copy(), v.copy(), initial_state, candidates_bipartition)
+# candidate_bipartitions = bipartition_system(result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states)
 # print(f"{candidate_bipartitions=}")
-# [min_emd_key, min_emd_result] = min_EMD(df_tpm.copy(), v, candidate_bipartitions, initial_state)
+# initial_state_v, _ = set_to_binary(v, len(result_df.index[0]), len(df_tpm.columns[0]))
+# [min_emd_key, min_emd_result] = min_EMD(result_df.copy(), v.copy(), candidate_bipartitions, initial_state_v)
 # print(f"{min_emd_key=}, {min_emd_result=}")
