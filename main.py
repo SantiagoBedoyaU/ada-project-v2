@@ -4,6 +4,7 @@ from pyemd import emd
 from numpy.typing import NDArray
 import string
 
+
 def load_tpm(filename_tpm: str, num_elements: int):
     states = pd.Index(
         [np.binary_repr(i, width=num_elements)[::-1] for i in range(2**num_elements)]
@@ -43,15 +44,16 @@ def marginalize_rows(df_tpm, present_subsystem: str):
     result_df = df_tpm.groupby(new_index).mean()
     return reorder_little_endian(result_df)
 
+
 def reorder_little_endian(df):
     def bin_to_little_endian(bin_str):
         if not bin_str or not isinstance(bin_str, str):
             return 0
         bin_str = bin_str.strip()
-        if not all(c in '01' for c in bin_str):
+        if not all(c in "01" for c in bin_str):
             return 0
         return int(bin_str[::-1], 2)  # Invertir string y convertir a entero base 2
-    
+
     if df.empty:
         return df
     row_map = {idx: bin_to_little_endian(str(idx)) for idx in df.index}
@@ -59,6 +61,7 @@ def reorder_little_endian(df):
     col_map = {col: bin_to_little_endian(str(col)) for col in df.columns}
     new_col_order = pd.Series(col_map).sort_values()
     return df.reindex(index=new_row_order.index, columns=new_col_order.index)
+
 
 def marginalize_cols(df_tpm, future_subsystem: str):
     n_bits = len(df_tpm.columns[0])
@@ -205,14 +208,16 @@ result_df = apply_background(df_tpm, initial_state, candidate_system)
 """
 
 
-def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candidates_bipartition: list):
+def bipartition_system(
+    df_tpm: pd.DataFrame, v: list, initial_state: str, candidates_bipartition: list
+):
     if len(v) <= 2:
         candidates_bipartition.append(v[-1])
         return candidates_bipartition
     w_1 = [v[0]]
     w_1l = []
     wp = [item for item in v if item not in w_1]
-    
+
     results_u = {}
 
     initial_state_values = df_tpm.loc[initial_state, :].values
@@ -265,10 +270,10 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
             label = ""
             for idx in sorted_idx:
                 label += initial_state[idx]
-                
+
             # print()
             # print()
-            
+
             # print(f"present_w1u={present}")
             # print(f"future_w1u={future}")
             # print(
@@ -339,12 +344,12 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
             result_emd = emd1 - emd2
             # diferencia_str = format(result_emd, '.20f')
             # print("Diferencia:", diferencia_str)
-            
+
             if isinstance(u, list):
                 results_u[tuple(u)] = result_emd
             else:
                 results_u[u] = result_emd
-        
+
         # print(f"{results_u=}")
         min_result = min(results_u.values())
         # print(f"{min_result=}")
@@ -355,7 +360,7 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
         wp.remove(key)
         w_1.append(key)
         w_1l.append(key)
-            
+
         # print(w_1l)
         results_u.clear()
         # print(f"{w_1=}")
@@ -366,17 +371,19 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
     v.remove(w_1l[-2])
     if isinstance(w_1l[-1], list) and isinstance(w_1l[-2], list):
         v.append(w_1l[-1] + w_1l[-2])
-    
+
     elif isinstance(w_1l[-2], list):
         v.append([w_1l[-1]] + w_1l[-2])
-    
+
     elif isinstance(w_1l[-1], list):
         v.append(w_1l[-1] + [w_1l[-2]])
     else:
         v.append([w_1l[-1], w_1l[-2]])
     # print(v)
     # print(w_1l)
-    candidates_bipartition = bipartition_system(df_tpm, v, initial_state, candidates_bipartition)
+    candidates_bipartition = bipartition_system(
+        df_tpm, v, initial_state, candidates_bipartition
+    )
     return candidates_bipartition
 
 
@@ -384,7 +391,7 @@ def set_to_binary(set: list, label_len: int):
     abc = string.ascii_lowercase
     binary_present = list(np.binary_repr(0, label_len))
     binary_future = list(np.binary_repr(0, label_len))
- 
+
     for elem in set:
         if isinstance(elem, list):
             for elem_2 in elem:
@@ -416,13 +423,71 @@ def build_v(candidate_system: str):
 
     return v
 
+
+def min_EMD(df_tpm: pd.DataFrame, v: list[str], bipartion_list: list[str], initial_state: str):
+    initial_state_values = df_tpm.loc[initial_state, :].values
+    initial_state_values = np.array(initial_state_values).astype(np.float64)
+
+    emd_results = {}
+    for elem in bipartion_list:
+        # print(f"{elem=}")
+        elemP = []
+        if isinstance(elem, list):
+            for e in v:
+                if e not in elem:
+                    elemP.append(e)
+        else:
+            elemP = [e for e in v if e != elem]
+        # print(f"{elemP=}")
+        
+        presentElem, futureElem = set_to_binary([elem], len(df_tpm.index[0]))
+        present_idx = {idx: bit for idx, bit in enumerate(presentElem) if bit == "1"}
+        sorted_idx = sorted(present_idx.keys())
+        label = ""
+        for idx in sorted_idx:
+            label += initial_state[idx]
+        # print(f"{presentElem=}, {futureElem=}")
+        marginalizacionElem = marginalize_rows(df_tpm, presentElem)
+        marginalizacionElem = marginalize_cols(marginalizacionElem, futureElem)
+        if len(label) > 0:
+            marginalizacionElem = marginalizacionElem.loc[label, :]
+
+        # print(f"{marginalizacionElem}")
+
+        presentElemP, futureElemP = set_to_binary([elemP], len(df_tpm.index[0]))
+        present_idx = {idx: bit for idx, bit in enumerate(presentElemP) if bit == "1"}
+        sorted_idx = sorted(present_idx.keys())
+        label = ""
+        for idx in sorted_idx:
+            label += initial_state[idx]
+        # print(f"{presentElemP=}, {futureElemP=}")
+        marginalizacionElemP = marginalize_rows(df_tpm, presentElemP)
+        marginalizacionElemP = marginalize_cols(marginalizacionElemP, futureElemP)
+        if len(label) > 0:
+            marginalizacionElemP = marginalizacionElemP.loc[label, :]
+        # print(f"{marginalizacionElemP=}")
+        
+        tensor_result = tensor_product(marginalizacionElem.values, marginalizacionElemP.values)
+        tensor_result = np.array(tensor_result).astype(np.float64)
+        emd = EMD(tensor_result, initial_state_values)
+        emd_results[tuple(elem)] = emd
+
+    min_emd_result = min(emd_results.values())
+    min_emd_key = [key for key, value in emd_results.items() if value == min_emd_result][0]
+    return [min_emd_key, min_emd_result]
+
+
 v = build_v(candidate_system)
+print(f"{v=}")
 candidates_bipartition = []
-r = bipartition_system(result_df, v, initial_state, candidates_bipartition)
-print(r)
+# print(result_df)
+candidate_bipartitions = bipartition_system(result_df.copy(), v.copy(), initial_state, candidates_bipartition)
+print(f"{candidate_bipartitions=}")
+[min_emd_key, min_emd_result] = min_EMD(result_df, v, candidate_bipartitions, initial_state)
+print(f"{min_emd_key=}, {min_emd_result=}")
 
 # f = []
 # example = ['1','2', ['1','2'], ['1', '2']]
-# f.append(example[-2:]) 
+# f.append(example[-2:])
 
 # print(f)
