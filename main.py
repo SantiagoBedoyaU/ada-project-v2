@@ -2,9 +2,7 @@ import numpy as np
 import pandas as pd
 from pyemd import emd
 from numpy.typing import NDArray
-from decimal import Decimal, getcontext
 import string
-
 
 def load_tpm(filename_tpm: str, num_elements: int):
     states = pd.Index(
@@ -208,23 +206,25 @@ result_df = apply_background(df_tpm, initial_state, candidate_system)
 
 
 def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candidates_bipartition: list):
-    w_1 = {v[0]}
+    if len(v) <= 2:
+        candidates_bipartition.append(v[-1])
+        return candidates_bipartition
+    w_1 = [v[0]]
     w_1l = []
-    keys = set(v)
-    wp = keys - w_1
+    wp = [item for item in v if item not in w_1]
+    
     results_u = {}
 
     initial_state_values = df_tpm.loc[initial_state, :].values
     while len(wp) > 0:
         for u in wp:
-            # w_1.add(u)
             # print(w_1)
             w_1u = w_1.copy()
-            w_1u.add(u)
-            w_1up = keys - w_1u
+            w_1u.append(u)
+            w_1up = [item for item in v if item not in w_1u]
 
-            # print(f"w_1={w_1u}")
-            # print(f"w_1u={w_1up}")
+            # print(f"w_1u={w_1u}")
+            # print(f"w_1up={w_1up}")
             """
                 Necesito verificar el valor que tiene el estado inicial
                 con el presente
@@ -236,8 +236,8 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
 
             # marginalization of w_1
             present, future = set_to_binary(w_1up, len(df_tpm.index[0]))
-            # print(f"present_w1u={present}")
-            # print(f"future_w1u={future}")
+            # print(f"present_w1up={present}")
+            # print(f"future_w1up={future}")
             present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
             sorted_idx = sorted(present_idx.keys())
             label = ""
@@ -269,8 +269,8 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
             # print()
             # print()
             
-            # print(f"present_w1={present}")
-            # print(f"future_w1={future}")
+            # print(f"present_w1u={present}")
+            # print(f"future_w1u={future}")
             # print(
             #     f"present={present}, future={future}, w_1={w_1}, label={label}, present_idx={present_idx}"
             # )
@@ -295,12 +295,12 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
             # print(first_product_result)
             # print(initial_state_values)
 
-            emd1 = Decimal(EMD(first_product_result, initial_state_values))
+            emd1 = EMD(first_product_result, initial_state_values)
             # print(emd1)
 
             # print(f"keys={keys}, u={u}")
-            up = keys - {u}
-            present, future = set_to_binary({u}, len(df_tpm.index[0]))
+            up = [item for item in v if item not in [u]]
+            present, future = set_to_binary([u], len(df_tpm.index[0]))
             present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
             sorted_idx = sorted(present_idx.keys())
             label = ""
@@ -333,24 +333,29 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
             # print(f"{second_product_result=}")
 
             second_product_result = np.array(second_product_result).astype(np.float64)
-            emd2 = Decimal(EMD(second_product_result, initial_state_values))
+            emd2 = EMD(second_product_result, initial_state_values)
 
             # print(f"{emd1=}, {emd2=}")
             result_emd = emd1 - emd2
             # diferencia_str = format(result_emd, '.20f')
             # print("Diferencia:", diferencia_str)
             
-            results_u[u] = result_emd
-            
+            if isinstance(u, list):
+                results_u[tuple(u)] = result_emd
+            else:
+                results_u[u] = result_emd
         
         # print(f"{results_u=}")
         min_result = min(results_u.values())
         # print(f"{min_result=}")
         key = [key for key, value in results_u.items() if value == min_result][0]
         # print(f"{key=}")
-        wp = wp-{key}
-        w_1.add(key)
+        if isinstance(key, tuple):
+            key = list(key)
+        wp.remove(key)
+        w_1.append(key)
         w_1l.append(key)
+            
         # print(w_1l)
         results_u.clear()
         # print(f"{w_1=}")
@@ -359,21 +364,41 @@ def bipartition_system(df_tpm: pd.DataFrame, v: list, initial_state: str, candid
     candidates_bipartition.append(w_1l[-1])
     v.remove(w_1l[-1])
     v.remove(w_1l[-2])
-    v.append(w_1l[-2:])  
+    if isinstance(w_1l[-1], list) and isinstance(w_1l[-2], list):
+        v.append(w_1l[-1] + w_1l[-2])
+    
+    elif isinstance(w_1l[-2], list):
+        v.append([w_1l[-1]] + w_1l[-2])
+    
+    elif isinstance(w_1l[-1], list):
+        v.append(w_1l[-1] + [w_1l[-2]])
+    else:
+        v.append([w_1l[-1], w_1l[-2]])
+    # print(v)
+    # print(w_1l)
+    candidates_bipartition = bipartition_system(df_tpm, v, initial_state, candidates_bipartition)
     return candidates_bipartition
-    # bipartition_system(df_tpm, v, initial_state, candidates_bipartition)
 
 
-def set_to_binary(set: set[str], label_len: int):
+def set_to_binary(set: list, label_len: int):
     abc = string.ascii_lowercase
     binary_present = list(np.binary_repr(0, label_len))
     binary_future = list(np.binary_repr(0, label_len))
+ 
     for elem in set:
-        idx = abc.index(elem[0])
-        if "t+1" in elem:
-            binary_future[idx] = "1"
+        if isinstance(elem, list):
+            for elem_2 in elem:
+                idx = abc.index(elem_2[0])
+                if "t+1" in elem_2:
+                    binary_future[idx] = "1"
+                else:
+                    binary_present[idx] = "1"
         else:
-            binary_present[idx] = "1"
+            idx = abc.index(elem[0])
+            if "t+1" in elem:
+                binary_future[idx] = "1"
+            else:
+                binary_present[idx] = "1"
 
     return ["".join(binary_present), "".join(binary_future)]
 
@@ -391,8 +416,13 @@ def build_v(candidate_system: str):
 
     return v
 
-getcontext().prec = 20
 v = build_v(candidate_system)
 candidates_bipartition = []
 r = bipartition_system(result_df, v, initial_state, candidates_bipartition)
 print(r)
+
+# f = []
+# example = ['1','2', ['1','2'], ['1', '2']]
+# f.append(example[-2:]) 
+
+# print(f)
