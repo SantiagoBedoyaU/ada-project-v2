@@ -276,12 +276,16 @@ def bipartition_system(
     wp = [item for item in v if item not in w_1]
 
     results_u = {}
+    iv= build_v(initial_state, '000')
+    
+    present_v, _ = set_to_binary(iv, len(df_tpm.index[0]), len(df_tpm.columns[0]))
 
-    initial_state_v, future = set_to_binary(
-        v, len(df_tpm.index[0]), len(df_tpm.columns[0])
-    )
+    # initial_state_v, future = set_to_binary(
+    #     v, len(df_tpm.index[0]), len(df_tpm.columns[0])
+    # )
+    # print(f"{initial_state_v=}")
     # print(f"{present=}, {future=}")
-    initial_state_values = df_tpm.loc[initial_state_v, :].values
+    initial_state_values = df_tpm.loc[present_v, :].values
     # print(f"{initial_state_values=}")
     while len(wp) > 0:
         for u in wp:
@@ -289,55 +293,103 @@ def bipartition_system(
             w_1u = w_1.copy()
             w_1u.append(u)
             w_1up = [item for item in v if item not in w_1u]
+            
+            print(f"{w_1=}")
+            print(f"{w_1u=}")
+            print(f"{w_1up=}")
 
             # marginalization of W_1u
             present, future = set_to_binary(
-                w_1up, len(df_tpm.index[0]), len(df_tpm.columns[0])
+                w_1u, len(df_tpm.index[0]), len(df_tpm.columns[0])
             )
+            
+            print(f"{present=}")
+            print(f"{future=}")
+            
             marginalizacionW_1u = puta_function(
                 df_tpm, present, future, node_state, initial_state
             )
+            
+            print("MarginalizacionW_1u")
+            print(marginalizacionW_1u)
 
             # marginalization of w_1up
             present, future = set_to_binary(
-                w_1u, len(df_tpm.index[0]), len(df_tpm.columns[0])
+                w_1up, len(df_tpm.index[0]), len(df_tpm.columns[0])
             )
+            
+            print(f"{present=}")
+            print(f"{future=}")
+            
             marginalizacionW_1up = puta_function(
                 df_tpm, present, future, node_state, initial_state
             )
+            
+            print("MarginalizacionW_1up")
+            print(marginalizacionW_1up)
 
             # tensor_product
             first_product_result = tensor_product(
                 marginalizacionW_1u.values, marginalizacionW_1up.values
             )
+            
+            print(f"{first_product_result=}")
+            
 
             # 1 EMD
             first_product_result = np.array(first_product_result).astype(np.float64)
             initial_state_values = np.array(initial_state_values).astype(np.float64)
+            
+            print(f"{initial_state_values=}")
+            
             emd1 = EMD(first_product_result, initial_state_values)
+            
+            print(f"{emd1=}")
+            
 
             up = [item for item in v if item not in [u]]
+            
+            print(f"{[u]=}")
+            print(f"{up=}")
 
             present, future = set_to_binary(
                 [u], len(df_tpm.index[0]), len(df_tpm.columns[0])
             )
+            
+            print(f"{present=}")
+            print(f"{future=}")
+            
             marginalizacionU = puta_function(
                 df_tpm, present, future, node_state, initial_state
             )
 
+            print("Marginalizacion_U")
+            print(marginalizacionU)
+            
             present, future = set_to_binary(
                 up, len(df_tpm.index[0]), len(df_tpm.columns[0])
             )
+            
+            print(f"{present=}")
+            print(f"{future=}")
+            
             marginalizacionUp = puta_function(
                 df_tpm, present, future, node_state, initial_state
             )
+            
+            print("Marginalizacion_Up")
+            print(marginalizacionUp)
 
             second_product_result = tensor_product(
                 marginalizacionU.values, marginalizacionUp.values
             )
+            
+            print(f"{second_product_result=}")
 
             second_product_result = np.array(second_product_result).astype(np.float64)
             emd2 = EMD(second_product_result, initial_state_values)
+            
+            print(f"{emd2=}")
 
             result_emd = emd1 - emd2
 
@@ -346,9 +398,9 @@ def bipartition_system(
             else:
                 results_u[u] = result_emd
 
-        # print(f"{results_u=}")
+        print(f"{results_u=}")
         min_result = min(results_u.values())
-        # print(f"{min_result=}")
+        print(f"{min_result=}")
         key = [key for key, value in results_u.items() if value == min_result][0]
         # print(f"{key=}")
         if isinstance(key, tuple):
@@ -356,6 +408,9 @@ def bipartition_system(
         wp.remove(key)
         w_1.append(key)
         w_1l.append(key)
+        
+        print(f"{w_1l=}")
+        
 
         results_u.clear()
     candidates_bipartition.append(w_1l[-1])
