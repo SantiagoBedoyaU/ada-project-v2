@@ -479,20 +479,31 @@ def main():
         candidate_system_str,
         present_subsystem_str,
         future_subsystem_str,
-    ] = np.loadtxt("system_values_2.csv", delimiter=",", skiprows=1, dtype=str)
+    ] = np.loadtxt("system_values_4.csv", delimiter=",", skiprows=1, dtype=str)
     initial_state = initial_state_str.strip()
     candidate_system = candidate_system_str.strip()
     present_subsystem = present_subsystem_str.strip()
     future_subsystem = future_subsystem_str.strip()
-    matrix_1, states = load_tpm_2("matrix_guia_2.csv", len(candidate_system))
-    matrix_2, states = load_tpm_2("matrix_guia_3.csv", len(candidate_system))
-    matrix_3, states = load_tpm_2("matrix_guia_4.csv", len(candidate_system))
-    matrix_4, states = load_tpm_2("matrix_guia_5.csv", len(candidate_system))
-    matrix_5, states = load_tpm_2("matrix_guia_6.csv", len(candidate_system))
+    matrix_1, states = load_tpm_2("./red2/state_node_a.csv", len(candidate_system))
+    matrix_2, states = load_tpm_2("./red2/state_node_b.csv", len(candidate_system))
+    matrix_3, states = load_tpm_2("./red2/state_node_c.csv", len(candidate_system))
+    matrix_4, states = load_tpm_2("./red2/state_node_d.csv", len(candidate_system))
+    matrix_5, states = load_tpm_2("./red2/state_node_e.csv", len(candidate_system))
+    matrix_6, states = load_tpm_2("./red2/state_node_f.csv", len(candidate_system))
+    matrix_7, states = load_tpm_2("./red2/state_node_g.csv", len(candidate_system))
+    matrix_8, states = load_tpm_2("./red2/state_node_h.csv", len(candidate_system))
+    matrix_9, states = load_tpm_2("./red2/state_node_i.csv", len(candidate_system))
+    matrix_10, states = load_tpm_2("./red2/state_node_j.csv", len(candidate_system))
+    
     tensor_flow = tensor_product_of_matrix(matrix_1, matrix_2)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
+    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_6)
+    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_7)
+    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_8)
+    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_9)
+    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_10)
 
 
     # print(tensor_flow)
@@ -536,54 +547,54 @@ def main():
 ##############################################
 # Casos de prueba
 ##############################################
-inicio = time.perf_counter()
-[
-    initial_state_str,
-    candidate_system_str,
-    present_subsystem_str,
-    future_subsystem_str,
-] = np.loadtxt("system_values_3.csv", delimiter=",", skiprows=1, dtype=str)
-initial_state = initial_state_str.strip()
-candidate_system = candidate_system_str.strip()
-present_subsystem = present_subsystem_str.strip()
-future_subsystem = future_subsystem_str.strip()
-matrix, states = load_tpm_3("matriz_guia_final.csv", len(candidate_system))
+# inicio = time.perf_counter()
+# [
+#     initial_state_str,
+#     candidate_system_str,
+#     present_subsystem_str,
+#     future_subsystem_str,
+# ] = np.loadtxt("system_values_3.csv", delimiter=",", skiprows=1, dtype=str)
+# initial_state = initial_state_str.strip()
+# candidate_system = candidate_system_str.strip()
+# present_subsystem = present_subsystem_str.strip()
+# future_subsystem = future_subsystem_str.strip()
+# matrix, states = load_tpm("resultado_15.csv", len(candidate_system))
 
 
-# print(tensor_flow)
-print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
-df_tpm = apply_background(matrix, initial_state, candidate_system)
-# print(df_tpm)
+# # print(tensor_flow)
+# print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
+# df_tpm = apply_background(matrix, initial_state, candidate_system)
+# # print(df_tpm)
 
-v = build_v(present_subsystem, future_subsystem)
+# v = build_v(present_subsystem, future_subsystem)
 
-global global_v 
+# global global_v 
 
-global_v = v.copy()
+# global_v = v.copy()
 
-present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
-result_df = marginalize_cols(df_tpm, future)
-result_df = marginalize_rows(result_df, present)
+# present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+# result_df = marginalize_cols(df_tpm, future)
+# result_df = marginalize_rows(result_df, present)
 
-node_states = get_matrices_node_state(result_df)
+# node_states = get_matrices_node_state(result_df)
 
 
-candidates_bipartition = []
-candidate_bipartitions = bipartition_system(
-    result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
-)
-print(f"{candidate_bipartitions=}")
-initial_state_v, _ = set_to_binary(global_v, v, len(result_df.index[0]), len(df_tpm.columns[0]))
-present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-sorted_idx = sorted(present_idx.keys())
-label = ""
-for idx in sorted_idx:
-    label += initial_state[idx]
+# candidates_bipartition = []
+# candidate_bipartitions = bipartition_system(
+#     result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
+# )
+# print(f"{candidate_bipartitions=}")
+# initial_state_v, _ = set_to_binary(global_v, v, len(result_df.index[0]), len(df_tpm.columns[0]))
+# present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
+# sorted_idx = sorted(present_idx.keys())
+# label = ""
+# for idx in sorted_idx:
+#     label += initial_state[idx]
     
-[min_emd_key, min_emd_result] = min_EMD(
-    result_df.copy(), v.copy(), candidate_bipartitions, label
-)
-print(f"{min_emd_key=}, {min_emd_result=}")
-fin = time.perf_counter()
-print("Tiempo=")
-print(fin-inicio)
+# [min_emd_key, min_emd_result] = min_EMD(
+#     result_df.copy(), v.copy(), candidate_bipartitions, label
+# )
+# print(f"{min_emd_key=}, {min_emd_result=}")
+# fin = time.perf_counter()
+# print("Tiempo=")
+# print(fin-inicio)
