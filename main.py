@@ -112,11 +112,45 @@ def marginalize_cols(df_tpm: pd.DataFrame, future_subsystem: str):
     return r
 
 
-def tensor_product(df1: list[float], df2: list[float]):
-    if type(df1[0]) is np.ndarray:
-        df1 = df1[0]
-    if type(df2[0]) is np.ndarray:
-        df2 = df2[0]
+def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame):
+    """
+               AC
+               00   10   01   11
+        df1 = [1.0, 0.0, 1.0, 0.0]
+
+               BD
+               00   10   01    11
+        df2 = [1.0, 0.0, 1.0, 0.0]
+
+    """
+
+    # if type(df1[0]) is np.ndarray:
+    #     df1 = df1[0]
+    # if type(df2[0]) is np.ndarray:
+    #     df2 = df2[0]
+    print("++++++++++++++")
+    print(df1)
+    print()
+    print(df2)
+    print("++++++++++++++")
+
+    df1_columns = ['000', '100', '010', '110', '001', '101', '011', '111']
+    df2_columns = ['000', '100', '010', '110', '001', '101', '011', '111']
+
+    def calc_key():
+        pass
+
+    labels: dict[str, float] = {} # labels.keys() = []
+    for df1_idx, df1_vals in df1.items():
+        column_df1 = df1_idx
+        val_df1 = df1_vals.values.tolist()[0]
+        for df2_idx, df2_vals in df2.items():
+            column_df2 = df2_idx
+            val_df2 = df2_vals.tolist()[0]
+
+            result = val_df1 * val_df2
+        print(f"{df1_idx=}, {df1_vals=}, {df1_vals.values.tolist()=}")
+        input()
 
     result = []
     for df2_elem in df2:
@@ -197,7 +231,7 @@ def marginalize_node_states(
         marginalizacion = marginalize_cols(df_tpm, future)
         marginalizacion = marginalize_rows(marginalizacion, present)
         if len(label) > 0:
-            marginalizacion = marginalizacion.loc[label, :]
+            marginalizacion = marginalizacion.loc[[label], :]
         print(marginalizacion)
 
     return marginalizacion
@@ -262,7 +296,7 @@ def bipartition_system(
             
             # tensor_product
             first_product_result = tensor_product(
-                marginalizacionW_1u.values, marginalizacionW_1up.values
+                marginalizacionW_1u, marginalizacionW_1up
             )
             
             print(f"{first_product_result=}")
