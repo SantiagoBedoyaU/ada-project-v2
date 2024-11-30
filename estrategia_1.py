@@ -5,7 +5,6 @@ from numpy.typing import NDArray
 import string
 import time
 
-
 def load_tpm(filename_tpm: str, num_elements: int):
     states = pd.Index(
         [np.binary_repr(i, width=num_elements)[::-1] for i in range(2**num_elements)]
