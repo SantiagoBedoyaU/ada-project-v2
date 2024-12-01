@@ -6,6 +6,26 @@ import string
 import time
 
 def load_tpm(filename_tpm: str, num_elements: int):
+    """
+    Carga una matriz de transición de probabilidad (TPM) desde un archivo y genera un índice de estados.
+
+    Args:
+        filename_tpm (str): La ruta al archivo que contiene la matriz de transición de probabilidad.
+        num_elements (int): El número de elementos (o estados) que se utilizarán para generar el índice.
+
+    Returns:
+        tuple: Una tupla que contiene:
+            - pd.DataFrame: Un DataFrame que representa la matriz de transición de probabilidad, 
+              con índices y columnas correspondientes a los estados.
+            - pd.Index: Un índice de estados generado a partir del número de elementos.
+
+    Raises:
+        ValueError: Si el archivo no se puede cargar o si el número de elementos es inválido.
+    
+    Example:
+        >>> df, states = load_tpm("tpm.csv", 3)
+        >>> print(df)
+    """
     states = pd.Index(
         [np.binary_repr(i, width=num_elements)[::-1] for i in range(2**num_elements)]
     )
@@ -14,6 +34,26 @@ def load_tpm(filename_tpm: str, num_elements: int):
     return df_tpm, states
 
 def load_tpm_2(filename_tpm: str, num_elements: int):
+    """
+    Carga una matriz de transición de probabilidad (TPM) desde un archivo y genera un índice de estados.
+
+    Args:
+        filename_tpm (str): La ruta al archivo que contiene la matriz de transición de probabilidad.
+        num_elements (int): El número de elementos (o estados) que se utilizarán para generar el índice.
+
+    Returns:
+        tuple: Una tupla que contiene:
+            - pd.DataFrame: Un DataFrame que representa la matriz de transición de probabilidad, 
+              con índices y columnas correspondientes a los estados.
+            - pd.Index: Un índice de estados generado a partir del número de elementos.
+
+    Raises:
+        ValueError: Si el archivo no se puede cargar o si el número de elementos es inválido.
+    
+    Example:
+        >>> df, states = load_tpm("tpm.csv", 3)
+        >>> print(df)
+    """
     states = pd.Index(
         [np.binary_repr(i, width=num_elements)[::-1] for i in range(2**num_elements)]
     )
@@ -23,6 +63,21 @@ def load_tpm_2(filename_tpm: str, num_elements: int):
     return df_tpm, states
 
 def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
+    """
+    Aplica un filtro de fondo a una matriz de transición de probabilidad (TPM) 
+    y genera un nuevo DataFrame con estados marginalizados.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        initial_state: Estado inicial que se utilizará para filtrar los estados.
+        candidate_system: Sistema candidato que determina qué bits se consideran en el fondo.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que contiene los estados filtrados y marginalizados.
+
+    Example:
+        >>> result_df = apply_background(df_tpm, initial_state, candidate_system)
+    """
     background_condition = {
         idx: initial_state[idx]
         for idx, bit in enumerate(candidate_system)
@@ -48,6 +103,23 @@ def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
     return result_df
 
 def marginalize_rows(df_tpm: pd.DataFrame, present_subsystem: str):
+    """
+    Marginaliza las filas de una matriz de transición de probabilidad (TPM) 
+    según un subsistema presente, calculando el promedio de los estados.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        present_subsystem (str): Cadena binaria que indica qué bits se deben mantener.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que contiene las filas marginalizadas.
+
+    Raises:
+        ValueError: Si la longitud del subsistema presente no coincide con el número de bits en la TPM.
+
+    Example:
+        >>> result_df = marginalize_rows(df_tpm, "110")
+    """
     df_tpm = df_tpm.sort_index()
 
     n_bits = len(df_tpm.index[0])
@@ -64,6 +136,19 @@ def marginalize_rows(df_tpm: pd.DataFrame, present_subsystem: str):
     return reorder_little_endian(result_df)
 
 def reorder_little_endian(df: pd.DataFrame):
+    """
+    Reordena las filas y columnas de un DataFrame según el orden little-endian 
+    basado en sus índices y nombres de columnas, respectivamente.
+
+    Args:
+        df (pd.DataFrame): DataFrame que se desea reordenar.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame con las filas y columnas reordenadas.
+
+    Example:
+        >>> reordered_df = reorder_little_endian(df)
+    """
     def bin_to_little_endian(bin_str):
         if not bin_str or not isinstance(bin_str, str):
             return 0
@@ -81,6 +166,23 @@ def reorder_little_endian(df: pd.DataFrame):
     return df.reindex(index=new_row_order.index, columns=new_col_order.index)
 
 def marginalize_cols(df_tpm: pd.DataFrame, future_subsystem: str):
+    """
+    Marginaliza las columnas de una matriz de transición de probabilidad (TPM) 
+    según un subsistema futuro, sumando los estados correspondientes.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        future_subsystem (str): Cadena binaria que indica qué bits se deben mantener.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que contiene las columnas marginalizadas.
+
+    Raises:
+        ValueError: Si la longitud del subsistema futuro no coincide con el número de bits en la TPM.
+
+    Example:
+        >>> result_df = marginalize_cols(df_tpm, "110")
+    """
     df_tpm = df_tpm.reindex(sorted(df_tpm.columns), axis=1)
 
     n_bits = len(df_tpm.columns[0])
@@ -98,6 +200,22 @@ def marginalize_cols(df_tpm: pd.DataFrame, future_subsystem: str):
     return r
 
 def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df2: list): 
+    """
+    Calcula el producto tensorial de dos DataFrames, combinando sus índices y valores 
+    según las claves especificadas.
+
+    Args:
+        df1 (pd.DataFrame): Primer DataFrame para el producto tensorial.
+        df2 (pd.DataFrame): Segundo DataFrame para el producto tensorial.
+        keys_df1 (list): Lista de claves que representan los índices de df1.
+        keys_df2 (list): Lista de claves que representan los índices de df2.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que representa el producto tensorial de df1 y df2.
+
+    Example:
+        >>> result_df = tensor_product(df1, df2, ['a', 'b'], ['c', 'd'])
+    """
     products: dict[str, float] = {}
     pd_result = pd.DataFrame()
     if df1.index.tolist()[0] == df2.index.tolist()[0]:
@@ -156,6 +274,20 @@ def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df
     return pd_result
 
 def expand_matrix(df_tpm: pd.DataFrame, present: str):
+    """
+    Expande una matriz de transición de probabilidad (TPM) según un patrón binario 
+    que indica cómo deben ser modificados los índices.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        present (str): Cadena binaria que indica cómo expandir la matriz (con '0' y '1').
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que representa la matriz TPM expandida.
+
+    Example:
+        >>> expanded_df = expand_matrix(df_tpm, "101")
+    """
     empty_label = [0] * len(present)
     label_results = []
     new_labels = []
@@ -196,6 +328,19 @@ def expand_matrix(df_tpm: pd.DataFrame, present: str):
     return expanded_df_tpm
             
 def interleave(df, n):
+    """
+    Intercala las filas de un DataFrame en bloques de tamaño n.
+
+    Args:
+        df (pd.DataFrame): DataFrame cuyas filas se van a intercalar.
+        n (int): Tamaño del bloque para la intercalación.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame con las filas intercaladas.
+
+    Example:
+        >>> interleaved_df = interleave(df, 2)
+    """
     interleaved_rows = []
     i1, i2 = 0, 0
     
@@ -212,6 +357,19 @@ def interleave(df, n):
     return pd.DataFrame(interleaved_rows, columns=df.columns)
 
 def tensor_product_of_matrix(df1: pd.DataFrame, df2: pd.DataFrame):
+    """
+    Calcula el producto tensorial de dos DataFrames, combinando columnas de cada uno.
+
+    Args:
+        df1 (pd.DataFrame): Primer DataFrame para el producto tensorial.
+        df2 (pd.DataFrame): Segundo DataFrame para el producto tensorial.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que representa el producto tensorial de df1 y df2.
+
+    Example:
+        >>> result_df = tensor_product_of_matrix(df1, df2)
+    """
     result = pd.DataFrame()
     for df2col in df2.columns:
         for df1col in df1.columns:
@@ -245,6 +403,22 @@ def marginalize_node_states(
     set_m: list[str],
     label: str
 ):
+    """
+    Marginaliza los estados de los nodos en una matriz de transición de probabilidad (TPM) 
+    y combina los resultados en un solo DataFrame.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        node_state (dict): Diccionario que contiene los estados de los nodos.
+        set_m (list[str]): Lista de elementos para marginalizar.
+        label (str): Etiqueta para filtrar los resultados.
+
+    Returns:
+        pd.DataFrame: Un DataFrame que representa el estado marginalizado del nodo especificado.
+
+    Example:
+        >>> result = marginalize_node_states(df_tpm, node_state, set_m, label)
+    """
     viewed_letters = []
     results_node_states = node_state.copy()
     
@@ -290,6 +464,23 @@ def first_marginalize_node_states(
     node_state: dict,
     set_m: list
 ):
+    """
+    Realiza la marginalización de los estados de los nodos en una matriz de transición de probabilidad 
+    (TPM) y combina los resultados en un solo DataFrame.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        present (str): Estado presente que se utilizará para la marginalización.
+        future (str): Estado futuro que se utilizará para la marginalización.
+        node_state (dict): Diccionario que contiene los estados de los nodos.
+        set_m (list): Lista de elementos para marginalizar.
+
+    Returns:
+        pd.DataFrame: Un DataFrame que representa el estado marginalizado de los nodos.
+
+    Example:
+        >>> result = first_marginalize_node_states(df_tpm, present, future, node_state, set_m)
+    """
     results_node_states = {}
     for elem in set_m:
         a = node_state[elem]     
@@ -316,6 +507,23 @@ def bipartition_system(
     candidates_bipartition: dict,
     node_state: dict,
 ):
+    """
+    Realiza la bipartición de un sistema basado en la matriz de transición de probabilidad 
+    (TPM) y los estados de los nodos, buscando minimizar la distancia entre las particiones.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        a (list): Lista de elementos a biparticionar.
+        initial_state (str): Estado inicial que se utilizará para la evaluación.
+        candidates_bipartition (dict): Diccionario que contiene candidatos a bipartición.
+        node_state (dict): Diccionario que contiene los estados de los nodos.
+
+    Returns:
+        dict: Un diccionario actualizado de candidatos a bipartición.
+
+    Example:
+        >>> candidates = bipartition_system(df_tpm, a, initial_state, candidates_bipartition, node_state)
+    """
     if len(a) <= 2:
         return candidates_bipartition
     w_1 = [a[0]]
@@ -424,6 +632,24 @@ def bipartition_system(
     return candidates_bipartition
 
 def set_to_binary_1(set: list, present_label_len: int, future_label_len: int):
+    """
+    Convierte un conjunto de elementos en representaciones binarias para los estados presentes 
+    y futuros basados en la longitud de las etiquetas proporcionadas.
+
+    Args:
+        set (list): Lista de elementos a convertir en binario. Los elementos pueden ser cadenas 
+                     o listas de cadenas que contengan etiquetas.
+        present_label_len (int): Longitud de la representación binaria para el estado presente.
+        future_label_len (int): Longitud de la representación binaria para el estado futuro.
+
+    Returns:
+        list: Una lista que contiene dos cadenas binarias: la primera para el estado presente 
+              y la segunda para el estado futuro.
+
+    Example:
+        >>> binary_states = set_to_binary_1(['a', 'b', 'c_t+1'], 3, 3)
+        >>> print(binary_states)  # Output: ['110', '001']
+    """
     abc = string.ascii_lowercase
     binary_present = list(np.binary_repr(0, present_label_len))
     binary_future = list(np.binary_repr(0, future_label_len))
@@ -445,6 +671,24 @@ def set_to_binary_1(set: list, present_label_len: int, future_label_len: int):
     return ["".join(binary_present), "".join(binary_future)]
 
 def set_to_binary_2(global_a: list, subset: list): 
+    """
+    Convierte un subconjunto de elementos en representaciones binarias para los estados presentes 
+    y futuros, basándose en un conjunto global. 
+
+    Args:
+        global_a (list): Lista que contiene pares de elementos, donde el primer elemento 
+                         representa el estado presente y el segundo el estado futuro.
+        subset (list): Lista de elementos a convertir en binario.
+
+    Returns:
+        list: Una lista que contiene dos cadenas binarias: la primera para el estado presente, 
+              la segunda para el estado futuro, y una lista de elementos no duplicados del 
+              subconjunto para el estado futuro.
+
+    Example:
+        >>> binary_states = set_to_binary_2([['a', 'A'], ['b', 'B']], ['a', ['b', 't+1']])
+        >>> print(binary_states)  # Output: ['11', '01', ['B']]
+    """
     abc = string.ascii_lowercase
     abc_upper = string.ascii_uppercase
     positions_to_keep_present = []
@@ -517,6 +761,23 @@ def set_to_binary_2(global_a: list, subset: list):
     return ["".join(binary_present), "".join(binary_future), non_duplicated_subset_t1]
 
 def set_to_binary(global_a: list, element: str):
+    """
+    Convierte un elemento y un conjunto global en representaciones binarias para los estados 
+    presentes y futuros, excluyendo el elemento especificado.
+
+    Args:
+        global_a (list): Lista de pares de elementos, donde el primer elemento representa 
+                         el estado presente y el segundo el estado futuro.
+        element (str): Un elemento en forma de cadena que se debe excluir del conjunto global.
+
+    Returns:
+        tuple: Una tupla que contiene dos cadenas binarias: la primera para el estado presente 
+               y la segunda para el estado futuro.
+
+    Example:
+        >>> binary_states = set_to_binary([['a', 'A'], ['b', 'B'], ['c', 'C']], 'b')
+        >>> print(binary_states)  # Output: ('10', '10')
+    """
     result = [s for s in global_a if s != element]
     present = []
     future  = []
@@ -551,6 +812,25 @@ def set_to_binary(global_a: list, element: str):
     return present_str, future_str
 
 def get_matrices_node_state(df_tpm: pd.DataFrame, future_subsystem: list):
+    """
+    Genera matrices de estado de nodos a partir de un DataFrame de transición de probabilidad 
+    y un sistema futuro especificado.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        future_subsystem (list): Lista que indica el estado futuro de cada nodo, donde '1' 
+                                 representa un estado activo.
+
+    Returns:
+        dict: Un diccionario donde las claves son letras (a, b, c, ...) y los valores son 
+              matrices de estado correspondientes a cada nodo activo.
+
+    Example:
+        >>> import pandas as pd
+        >>> df = pd.DataFrame([[0.1, 0.9], [0.4, 0.6]], columns=['A', 'B'])
+        >>> states = get_matrices_node_state(df, ['1', '0'])
+        >>> print(states)  # Output: {'a': matrix_for_a}
+    """
     matrices_node_state = {}
     abc = string.ascii_lowercase
     cols = "0" * len(df_tpm.columns[0])
@@ -564,6 +844,23 @@ def get_matrices_node_state(df_tpm: pd.DataFrame, future_subsystem: list):
     return matrices_node_state
      
 def get_first_matrices_node_state(df_tpm: pd.DataFrame):
+    """
+    Genera matrices de estado inicial de nodos a partir de un DataFrame de transición de 
+    probabilidad.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+
+    Returns:
+        dict: Un diccionario donde las claves son letras (a, b, c, ...) y los valores son 
+              matrices de estado correspondientes a cada nodo.
+
+    Example:
+        >>> import pandas as pd
+        >>> df = pd.DataFrame([[0.1, 0.9], [0.4, 0.6]], columns=['A', 'B'])
+        >>> states = get_first_matrices_node_state(df)
+        >>> print(states)  # Output: {'a': matrix_for_a, 'b': matrix_for_b, ...}
+    """
     matrices_node_state = {}
     abc = string.ascii_lowercase
     cols = "0" * len(df_tpm.columns[0])
@@ -576,6 +873,23 @@ def get_first_matrices_node_state(df_tpm: pd.DataFrame):
     return matrices_node_state
 
 def build_v(present_subsystem: str, future_subsystem: str):
+    """
+    Construye una lista de variables de estado a partir de los subsistemas presentes y futuros.
+
+    Args:
+        present_subsystem (str): Cadena que representa el estado presente, donde '1' indica 
+                                 un estado activo.
+        future_subsystem (str): Cadena que representa el estado futuro, donde '1' indica 
+                                un estado activo.
+
+    Returns:
+        list: Lista de variables de estado en el formato 'a_t' y 'a_t+1', donde 'a' es la 
+              letra correspondiente al estado activo.
+
+    Example:
+        >>> v = build_v('110', '01')
+        >>> print(v)  # Output: ['a_t', 'b_t', 'c_t+1']
+    """
     v = []
     abc = string.ascii_lowercase
     for idx, bit in enumerate(present_subsystem):
@@ -587,6 +901,25 @@ def build_v(present_subsystem: str, future_subsystem: str):
     return v
 
 def build_a(present_subsystem: str, future_subsystem: str):
+    """
+    Construye una lista de combinaciones de variables de estado a partir de los subsistemas 
+    presentes y futuros.
+
+    Args:
+        present_subsystem (str): Cadena que representa el estado presente, donde '1' indica 
+                                 un estado activo.
+        future_subsystem (str): Cadena que representa el estado futuro, donde '1' indica 
+                                un estado activo.
+
+    Returns:
+        list: Lista de combinaciones de variables de estado en el formato 'aB', donde 'a' 
+              es la letra correspondiente al estado activo presente y 'B' es la letra 
+              correspondiente al estado activo futuro.
+
+    Example:
+        >>> a = build_a('110', '01')
+        >>> print(a)  # Output: ['aA', 'aB', 'bA', 'bB']
+    """
     a = []
     abc = string.ascii_lowercase
     abc_upper = string.ascii_uppercase
@@ -598,6 +931,21 @@ def build_a(present_subsystem: str, future_subsystem: str):
     return a
 
 def create_adjacency_matrix(subset: list):
+    """
+    Crea una matriz de adyacencia a partir de un subconjunto de elementos.
+
+    Args:
+        subset (list): Lista de elementos que se utilizarán para modificar la matriz de 
+                       adyacencia.
+
+    Returns:
+        np.ndarray: Matriz de adyacencia donde los elementos están marcados como '0' si 
+                    hay una conexión y '1' si no hay conexión.
+
+    Example:
+        >>> adjacency_matrix = create_adjacency_matrix(['a', 'b'])
+        >>> print(adjacency_matrix)  # Output: Matriz de adyacencia resultante
+    """
     present_global, future_global, _ = set_to_binary_2(global_a, global_a)
     adjacency_matrix = np.ones((len(present_global), len(future_global)))
     
@@ -630,6 +978,23 @@ def create_adjacency_matrix(subset: list):
     return adjacency_matrix
 
 def count_bipartite_graph_components(adjacency_matrix):
+    """
+    Cuenta los componentes de un grafo bipartito representado por una matriz de adyacencia.
+
+    Args:
+        adjacency_matrix (np.ndarray): Matriz de adyacencia del grafo bipartito.
+
+    Returns:
+        tuple: Un tuple que contiene:
+            - int: Número de componentes bipartitos.
+            - list: Lista de componentes, donde cada componente es un diccionario con nodos de fila y columna.
+
+    Example:
+        >>> adjacency_matrix = np.array([[1, 0, 1], [0, 1, 0], [1, 0, 1]])
+        >>> num_components, components = count_bipartite_graph_components(adjacency_matrix)
+        >>> print(num_components)  # Output: Número de componentes
+        >>> print(components)  # Output: Detalles de los componentes
+    """
     rows, cols = adjacency_matrix.shape
     visited_rows = np.zeros(rows, dtype=bool)
     visited_cols = np.zeros(cols, dtype=bool)
