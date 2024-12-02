@@ -553,21 +553,21 @@ def main():
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_9)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_10)
 
-    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
-
+    
     v = build_v(present_subsystem, future_subsystem)
 
     global global_v 
-
     global_v = v.copy()
-
+    
     present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
-    result_df = marginalize_cols(df_tpm, future)
-    result_df = marginalize_rows(result_df, present)
 
-    node_states = get_matrices_node_state(result_df)
+    node_states = get_first_matrices_node_state(df_tpm)
 
+    result_df = marginalize_node_states_1(df_tpm, present, future, node_states, sorted(node_states.keys()))
+    result_df = marginalize_cols(result_df, future)
+    node_states = get_matrices_node_state(result_df, future)
+    
     candidates_bipartition = []
     candidate_bipartitions = bipartition_system(
         result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
@@ -578,11 +578,11 @@ def main():
     label = ""
     for idx in sorted_idx:
         label += initial_state[idx]
-    
-    #----------------------- MIN EMD ---------------------------
+        
     [min_emd_key, min_emd_result] = min_EMD(
-        result_df.copy(), v.copy(), candidate_bipartitions, label
+        result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
     )
+    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     print(f"{min_emd_key=}, {min_emd_result=}")
     fin = time.perf_counter()
     print("Tiempo=")
@@ -703,4 +703,4 @@ def main_2():
 # fin = time.perf_counter()
 # print("Tiempo=")
 # print(fin-inicio)
-main_2()
+main()

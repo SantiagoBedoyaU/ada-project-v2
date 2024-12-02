@@ -103,7 +103,7 @@ def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
     result_df.columns = pd.Index(cut_filtered_states)
     return result_df
 
-def marginalize_rows(df_tpm: pd.DataFrame, present_subsystem: str, edge: str):
+def marginalize_rows(df_tpm: pd.DataFrame, present_subsystem: str):
     """
     Marginaliza las filas de una matriz de transición de probabilidad (TPM) 
     según un subsistema presente, calculando el promedio de la suma de las filas.
@@ -121,29 +121,19 @@ def marginalize_rows(df_tpm: pd.DataFrame, present_subsystem: str, edge: str):
     Example:
         >>> result_df = marginalize_rows(df_tpm, "110")
     """
-    alreadyCalculated = False
-    if edge in viewed_tpm:
-        if viewed_tpm[edge].equals(df_tpm):
-            alreadyCalculated = True
-        
-    if alreadyCalculated:
-        result_df = marginalized_tpm[edge]
-    else:
-        viewed_tpm[edge] = df_tpm
-        df_tpm = df_tpm.sort_index()
-        n_bits = len(df_tpm.index[0])
-        if len(present_subsystem) != n_bits:
-            raise ValueError("invalid present subsystem")
+    df_tpm = df_tpm.sort_index()
+    n_bits = len(df_tpm.index[0])
+    if len(present_subsystem) != n_bits:
+        raise ValueError("invalid present subsystem")
 
-        positions_to_keep = [i for i, bit in enumerate(present_subsystem) if bit == "1"]
+    positions_to_keep = [i for i, bit in enumerate(present_subsystem) if bit == "1"]
 
-        def extract_bits(binary_str, positions):
-            return "".join([binary_str[i] for i in positions])
+    def extract_bits(binary_str, positions):
+        return "".join([binary_str[i] for i in positions])
 
-        new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
-        result_df = df_tpm.groupby(new_index).mean()
-        result_df = reorder_little_endian(result_df)
-        marginalized_tpm[edge] = result_df
+    new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
+    result_df = df_tpm.groupby(new_index).mean()
+    result_df = reorder_little_endian(result_df)
     return result_df
 
 def reorder_little_endian(df: pd.DataFrame):
@@ -432,42 +422,52 @@ def marginalize_node_states(
         >>> result = marginalize_node_states(df_tpm, node_state, set_m, label)
     """
     viewed_letters = []
+    tuple_set_m = []
     results_node_states = node_state.copy()
-    
-    for elem in set_m:
-        if isinstance(elem, list):
-            for el in elem:
-                present, _ = set_to_binary(global_a, el)
-                future_letter = el[1].lower()
+    for sublist in set_m:
+        if isinstance(sublist, list):
+            tuple_set_m.append(tuple(sublist))
+        else:
+            tuple_set_m.append(sublist)
+    tuple_set_m = tuple(tuple_set_m)
+    if tuple_set_m in marginalized_tpm:
+        return marginalized_tpm[tuple_set_m]
+    else:
+        for elem in set_m:
+            if isinstance(elem, list):
+                for el in elem:
+                    present, _ = set_to_binary(global_a, el)
+                    future_letter = el[1].lower()
+                    if future_letter in viewed_letters:
+                        a = results_node_states[future_letter]
+                    else:
+                        a = node_state[future_letter]
+                        viewed_letters.append(future_letter)
+                    result_a = marginalize_rows(a.copy(), present)
+                    result_a = expand_matrix(result_a, present)
+                    results_node_states[future_letter] = result_a
+            else:
+                present, _ = set_to_binary(global_a, elem)
+                future_letter = elem[1].lower()
                 if future_letter in viewed_letters:
                     a = results_node_states[future_letter]
                 else:
                     a = node_state[future_letter]
                     viewed_letters.append(future_letter)
-                result_a = marginalize_rows(a.copy(), present, el)
+                result_a = marginalize_rows(a.copy(), present)
                 result_a = expand_matrix(result_a, present)
                 results_node_states[future_letter] = result_a
-        else:
-            present, _ = set_to_binary(global_a, elem)
-            future_letter = elem[1].lower()
-            if future_letter in viewed_letters:
-                a = results_node_states[future_letter]
-            else:
-                a = node_state[future_letter]
-                viewed_letters.append(future_letter)
-            result_a = marginalize_rows(a.copy(), present, elem)
-            result_a = expand_matrix(result_a, present)
-            results_node_states[future_letter] = result_a
     
-    keys = sorted(results_node_states.keys())
-    for i in range(0, len(keys)):
-        results_node_states[keys[i]] = results_node_states[keys[i]].loc[[label], :]
-    if len(keys) > 0:
-        first = keys[0]
-    for i in range(1, len(keys)):
-        results_node_states[keys[i]] = tensor_product(results_node_states[keys[i-1]], results_node_states[keys[i]], list(first), list(keys[i])) 
-        first = "".join([first, keys[i]])
-    return results_node_states[keys[-1]] 
+        keys = sorted(results_node_states.keys())
+        for i in range(0, len(keys)):
+            results_node_states[keys[i]] = results_node_states[keys[i]].loc[[label], :]
+        if len(keys) > 0:
+            first = keys[0]
+        for i in range(1, len(keys)):
+            results_node_states[keys[i]] = tensor_product(results_node_states[keys[i-1]], results_node_states[keys[i]], list(first), list(keys[i])) 
+            first = "".join([first, keys[i]])
+        marginalized_tpm[tuple_set_m] = results_node_states[keys[-1]] 
+        return results_node_states[keys[-1]] 
 
 def first_marginalize_node_states(
     present: str,
@@ -492,7 +492,7 @@ def first_marginalize_node_states(
     results_node_states = {}
     for elem in set_m:
         a = node_state[elem]     
-        result_a = marginalize_rows(a.copy(), present, elem)
+        result_a = marginalize_rows(a.copy(), present)
         results_node_states[elem] = result_a  
     
     marginalized_tpm.clear()
@@ -543,18 +543,16 @@ def bipartition_system(
     for idx in sorted_idx:
         label += initial_state[idx]
     initial_state_values = df_tpm.loc[label, :].values
+    b_break = False
     while len(wp) > 0:
-        tripartitions = []
+        if b_break:
+            break
         for u in wp:
             w_1u = w_1.copy()
             w_1u.append(u)
             isParticioned = False
             adjacency_matrix = create_adjacency_matrix(w_1u)
             num_components, _ = count_bipartite_graph_components(adjacency_matrix)
-            if num_components >= 3:
-                tripartitions.append(True)
-            else:
-                tripartitions.append(False)
             #----------------MARGINALIZACION W_1U ----------------
             marginalizacionW_1u = marginalize_node_states(
                 node_state, w_1u, label
@@ -575,17 +573,17 @@ def bipartition_system(
             if num_components == 2:
                 isParticioned = True
                 better_candidate = candidates_bipartition['0']
-                if better_candidate[-1] >= emd1:
-                    candidates_bipartition['0'] = [w_1u, emd1]             
+                if better_candidate[-1] == emd1 and len(better_candidate[0]) < len(w_1u):
+                    candidates_bipartition['0'] = [w_1u, emd1] 
+                elif better_candidate[-1] > emd1:
+                    candidates_bipartition['0'] = [w_1u, emd1]
 
             if isinstance(u, list):
-                results_u[tuple(u)] = [result_emd, emd1, isParticioned]
+                results_u[tuple(u)] = [result_emd, emd1, isParticioned, num_components]
             else:
-                results_u[u] = [result_emd, emd1, isParticioned]
+                results_u[u] = [result_emd, emd1, isParticioned, num_components]
         #-----------------ELECTION---------------------
         # First Criteria
-        if len(tripartitions) - sum(tripartitions) == 0:
-            break
         results_emd = [values[0] for values in results_u.values()]
         min_emd = min(results_emd)
         repeats = results_emd.count(min_emd)
@@ -610,7 +608,9 @@ def bipartition_system(
             else: 
                 key = [key for key, value in results_u.items() if value[1] == min_emds1][0]
         else:
-            key = [key for key, value in results_u.items() if value[0] == min_emd][0]
+            key = [key for key, value in results_u.items() if value[0] == min_emd][0]    
+        if results_u[key][3] >= 3:
+            b_break = True
         if isinstance(key, tuple):
             key = list(key)
         wp.remove(key)
@@ -950,11 +950,10 @@ def create_adjacency_matrix(subset: list):
                     hay una conexión y '0' si no hay conexión.
 
     Example:
-        >>> adjacency_matrix = create_adjacency_matrix('aB', 'bB', 'aC', 'bC')
+        >>> adjacency_matrix = create_adjacency_matrix(['aB', 'bB', 'aC', 'bC'])
         >>> print(adjacency_matrix)  # Output: Matriz de adyacencia resultante
     """
-    present_global, future_global, _ = set_to_binary_2(global_a, global_a)
-    adjacency_matrix = np.ones((len(present_global), len(future_global)))
+    adjacency_matrix = global_adjacency_matrix.copy()
     
     for elem in subset:
         if isinstance(elem,list):
@@ -1103,6 +1102,9 @@ def main_proof_cases():
     global_a = a.copy()
     global marginalized_tpm
     marginalized_tpm = {}
+    global global_adjacency_matrix 
+    present_global, future_global, _ = set_to_binary_2(a, a)
+    global_adjacency_matrix = np.ones((len(present_global), len(future_global)))
     
     global viewed_tpm
     viewed_tpm = {}
@@ -1116,7 +1118,7 @@ def main_proof_cases():
     node_states = get_matrices_node_state(result_df, future)
     
     candidates_bipartition = {}
-    candidates_bipartition['0'] = [None, 10000]
+    candidates_bipartition['0'] = [[], 10000]
     candidate_bipartitions = bipartition_system(
         result_df.copy(), a.copy(), initial_state, candidates_bipartition, node_states
     )
@@ -1168,9 +1170,9 @@ def main():
     global_a = a.copy()
     global marginalized_tpm
     marginalized_tpm = {}
-    
-    global viewed_tpm
-    viewed_tpm = {}
+    present_global, future_global, _ = set_to_binary_2(a, a)
+    global global_adjacency_matrix 
+    global_adjacency_matrix = np.ones((len(present_global), len(future_global)))
 
     present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
 
@@ -1181,7 +1183,7 @@ def main():
     node_states = get_matrices_node_state(result_df, future)
     
     candidates_bipartition = {}
-    candidates_bipartition['0'] = [None, 10000]
+    candidates_bipartition['0'] = [[], 10000]
     candidate_bipartitions = bipartition_system(
         result_df.copy(), a.copy(), initial_state, candidates_bipartition, node_states
     )
@@ -1190,4 +1192,4 @@ def main():
     fin = time.perf_counter()
     print("Tiempo=")
     print(fin-inicio)
-main_proof_cases()
+main()
