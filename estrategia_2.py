@@ -217,8 +217,7 @@ def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df
     Example:
         >>> result_df = tensor_product(df1, df2, ['a', 'b'], ['c', 'd'])
     """
-    products: dict[str, float] = {}
-    pd_result = pd.DataFrame()
+    temp_data = {}
     if df1.index.tolist()[0] == df2.index.tolist()[0]:
         initial_state_label = df1.index.tolist()
     else:
@@ -265,14 +264,13 @@ def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df
                     labels_copy[i] = int(str_df2_idx[idx_digit_2])
                     idx_digit_2 += 1
             result = val_df1 * val_df2
-            products["".join(map(str,labels_copy))] = result
-    
-    for elem in sorted(products.keys()):
-        pd_result[elem] = pd.Series(products[elem])
-        
-    pd_result.index = [initial_state_label[0]]   
-    pd_result = reorder_little_endian(pd_result)
-    return pd_result
+            row_key = initial_state_label[0]
+            col_key = "".join(map(str, labels_copy))
+            temp_data.setdefault(row_key, {})[col_key] = result
+
+    df_result = pd.DataFrame.from_dict(temp_data, orient="index").fillna(0)
+    df_result = reorder_little_endian(df_result)
+    return df_result
 
 def expand_matrix(df_tpm: pd.DataFrame, present: str):
     """
@@ -373,11 +371,12 @@ def tensor_product_of_matrix(df1: pd.DataFrame, df2: pd.DataFrame):
     Example:
         >>> result_df = tensor_product_of_matrix(df1, df2)
     """
-    result = pd.DataFrame()
+    result_dict = {}
     for df2col in df2.columns:
         for df1col in df1.columns:
             name = f"{df1col}{df2col}"
-            result[name] = df1[df1col] * df2[df2col]
+            result_dict[name] = df1[df1col] * df2[df2col]
+    result = pd.DataFrame(result_dict)
     return result
 
 def EMD(u: NDArray[np.float64], v: NDArray[np.float64]) -> float:
@@ -617,7 +616,6 @@ def bipartition_system(
         w_1.append(key)
         w_1l.append(key)
         results_u.clear()
-    
     if len(w_1l) > 1:
         a.remove(w_1l[-1])
         a.remove(w_1l[-2])
@@ -1071,7 +1069,6 @@ def count_bipartite_graph_components(adjacency_matrix):
 
 # Estrategia 2: Primer excel
 def main_proof_cases():
-    inicio = time.perf_counter()
     [
         initial_state_str,
         candidate_system_str,
@@ -1092,6 +1089,7 @@ def main_proof_cases():
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
+    inicio = time.perf_counter()
 
     print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
@@ -1129,7 +1127,6 @@ def main_proof_cases():
 
 # caso de prueba red 10
 def main():
-    inicio = time.perf_counter()
     [
         initial_state_str,
         candidate_system_str,
@@ -1160,7 +1157,8 @@ def main():
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_8)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_9)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_10)
-
+    
+    inicio = time.perf_counter()
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
 
     v = build_v(present_subsystem, future_subsystem)

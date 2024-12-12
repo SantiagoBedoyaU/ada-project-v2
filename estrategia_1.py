@@ -56,21 +56,27 @@ def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
     result_df.columns = pd.Index(cut_filtered_states)
     return result_df
 
-def marginalize_rows(df_tpm: pd.DataFrame, present_subsystem: str):
-    df_tpm = df_tpm.sort_index()
+def marginalize_rows(df_tpm: pd.DataFrame, str_node_state: str, present_subsystem: str):
+    key = str_node_state + present_subsystem
+    if key in marginalized_tpm:
+        return marginalized_tpm[key]
+    else:
+        df_tpm = df_tpm.sort_index()
 
-    n_bits = len(df_tpm.index[0])
-    if len(present_subsystem) != n_bits:
-        raise ValueError("invalid present subsystem")
+        n_bits = len(df_tpm.index[0])
+        if len(present_subsystem) != n_bits:
+            raise ValueError("invalid present subsystem")
 
-    positions_to_keep = [i for i, bit in enumerate(present_subsystem) if bit == "1"]
+        positions_to_keep = [i for i, bit in enumerate(present_subsystem) if bit == "1"]
 
-    def extract_bits(binary_str, positions):
-        return "".join([binary_str[i] for i in positions])
+        def extract_bits(binary_str, positions):
+            return "".join([binary_str[i] for i in positions])
 
-    new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
-    result_df = df_tpm.groupby(new_index).mean()
-    return reorder_little_endian(result_df)
+        new_index = df_tpm.index.map(lambda x: extract_bits(x, positions_to_keep))
+        result_df = df_tpm.groupby(new_index).mean()
+        result_df = reorder_little_endian(result_df)
+        marginalized_tpm[key] = result_df
+        return result_df
 
 def reorder_little_endian(df: pd.DataFrame):
     def bin_to_little_endian(bin_str):
@@ -107,8 +113,7 @@ def marginalize_cols(df_tpm: pd.DataFrame, future_subsystem: str):
     return r
 
 def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df2: list): 
-    products: dict[str, float] = {}
-    pd_result = pd.DataFrame()
+    temp_data = {}
     if df1.index.tolist()[0] == df2.index.tolist()[0]:
         initial_state_label = df1.index.tolist()
     else:
@@ -155,21 +160,27 @@ def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df
                     labels_copy[i] = int(str_df2_idx[idx_digit_2])
                     idx_digit_2 += 1
             result = val_df1 * val_df2
-            products["".join(map(str,labels_copy))] = result
+            row_key = initial_state_label[0]
+            col_key = "".join(map(str, labels_copy))
+            temp_data.setdefault(row_key, {})[col_key] = result
     
-    for elem in sorted(products.keys()):
-        pd_result[elem] = pd.Series(products[elem])
-        
-    pd_result.index = [initial_state_label[0]]   
-    pd_result = reorder_little_endian(pd_result)
-    return pd_result
+    # for elem in sorted(products.keys()):
+    #     df_result[elem] = pd.Series(products[elem])
+    
+    df_result = pd.DataFrame.from_dict(temp_data, orient="index").fillna(0)
+    df_result = reorder_little_endian(df_result)
+    return df_result
 
 def tensor_product_of_matrix(df1: pd.DataFrame, df2: pd.DataFrame):
-    result = pd.DataFrame()
+    # Diccionario para almacenar columnas temporalmente
+    result_dict = {}
     for df2col in df2.columns:
         for df1col in df1.columns:
             name = f"{df1col}{df2col}"
-            result[name] = df1[df1col] * df2[df2col]
+            result_dict[name] = df1[df1col] * df2[df2col]
+
+    # Crear el dataframe de una vez usando pd.DataFrame
+    result = pd.DataFrame(result_dict)
     return result
 
 def EMD(u: NDArray[np.float64], v: NDArray[np.float64]) -> float:
@@ -209,7 +220,7 @@ def marginalize_node_states(
     
     for elem in set_m:
         a = node_state[elem]     
-        result_a = marginalize_rows(a.copy(), present)
+        result_a = marginalize_rows(a.copy(), elem, present)
 
         if len(label) > 0:
             result_a = result_a.loc[[label], :]
@@ -226,7 +237,7 @@ def marginalize_node_states(
         marginalizacion = results_node_states[keys[-1]]
     else:
         marginalizacion = marginalize_cols(df_tpm, future)
-        marginalizacion = marginalize_rows(marginalizacion, present)
+        marginalizacion = marginalize_rows(marginalizacion, '0', present)
         if len(label) > 0:
             marginalizacion = marginalizacion.loc[[label], :]
     return marginalizacion
@@ -241,7 +252,7 @@ def marginalize_node_states_1(
     results_node_states = {}
     for elem in set_m:
         a = node_state[elem]     
-        result_a = marginalize_rows(a.copy(), present)
+        result_a = marginalize_rows(a.copy(), elem, present)
         results_node_states[elem] = result_a  
     
     keys = sorted(results_node_states.keys())
@@ -256,7 +267,8 @@ def marginalize_node_states_1(
         marginalizacion = results_node_states[keys[-1]]
     else:
         marginalizacion = marginalize_cols(df_tpm, future)
-        marginalizacion = marginalize_rows(marginalizacion, present)
+        marginalizacion = marginalize_rows(marginalizacion, '0', present)
+    marginalized_tpm.clear()
     return marginalizacion
 
 def bipartition_system(
@@ -532,16 +544,17 @@ def main():
     candidate_system = candidate_system_str.strip()
     present_subsystem = present_subsystem_str.strip()
     future_subsystem = future_subsystem_str.strip()
-    matrix_1, states = load_tpm_2("./red2/state_node_a.csv", len(candidate_system))
-    matrix_2, states = load_tpm_2("./red2/state_node_b.csv", len(candidate_system))
-    matrix_3, states = load_tpm_2("./red2/state_node_c.csv", len(candidate_system))
-    matrix_4, states = load_tpm_2("./red2/state_node_d.csv", len(candidate_system))
-    matrix_5, states = load_tpm_2("./red2/state_node_e.csv", len(candidate_system))
-    matrix_6, states = load_tpm_2("./red2/state_node_f.csv", len(candidate_system))
-    matrix_7, states = load_tpm_2("./red2/state_node_g.csv", len(candidate_system))
-    matrix_8, states = load_tpm_2("./red2/state_node_h.csv", len(candidate_system))
-    matrix_9, states = load_tpm_2("./red2/state_node_i.csv", len(candidate_system))
-    matrix_10, states = load_tpm_2("./red2/state_node_j.csv", len(candidate_system))
+    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
+    matrix_1, _ = load_tpm_2("./red2/state_node_a.csv", len(candidate_system))
+    matrix_2, _ = load_tpm_2("./red2/state_node_b.csv", len(candidate_system))
+    matrix_3, _ = load_tpm_2("./red2/state_node_c.csv", len(candidate_system))
+    matrix_4, _ = load_tpm_2("./red2/state_node_d.csv", len(candidate_system))
+    matrix_5, _ = load_tpm_2("./red2/state_node_e.csv", len(candidate_system))
+    matrix_6, _ = load_tpm_2("./red2/state_node_f.csv", len(candidate_system))
+    matrix_7, _ = load_tpm_2("./red2/state_node_g.csv", len(candidate_system))
+    matrix_8, _ = load_tpm_2("./red2/state_node_h.csv", len(candidate_system))
+    matrix_9, _ = load_tpm_2("./red2/state_node_i.csv", len(candidate_system))
+    matrix_10, _ = load_tpm_2("./red2/state_node_j.csv", len(candidate_system))
     
     tensor_flow = tensor_product_of_matrix(matrix_1, matrix_2)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
@@ -559,6 +572,8 @@ def main():
 
     global global_v 
     global_v = v.copy()
+    global marginalized_tpm
+    marginalized_tpm = {}
     
     present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
 
@@ -582,7 +597,6 @@ def main():
     [min_emd_key, min_emd_result] = min_EMD(
         result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
     )
-    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     print(f"{min_emd_key=}, {min_emd_result=}")
     fin = time.perf_counter()
     print("Tiempo=")
@@ -620,6 +634,8 @@ def main_2():
 
     global global_v 
     global_v = v.copy()
+    global marginalized_tpm
+    marginalized_tpm = {}
     
     present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
 
