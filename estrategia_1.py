@@ -1,7 +1,8 @@
-import numpy as np
-import pandas as pd
+from fastapi import UploadFile
 from pyemd import emd
 from numpy.typing import NDArray
+import numpy as np
+import pandas as pd
 import string
 import time
 
@@ -719,4 +720,55 @@ def main_2():
 # fin = time.perf_counter()
 # print("Tiempo=")
 # print(fin-inicio)
-main()
+
+async def solve(
+    tpms: list[UploadFile], 
+    initial_state: str, 
+    candidate_system: str, 
+    present_subsystem: str,
+    future_subsystem: str,
+):
+    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
+    n_elements = len(candidate_system)
+    matrix1, _ = load_tpm_2(tpms[0].file, n_elements)
+    matrix2, _ = load_tpm_2(tpms[1].file, n_elements)
+    tensor_product = tensor_product_of_matrix(matrix1, matrix2)
+    for i in range(2, len(tpms)):
+        matrix, _ = load_tpm_2(tpms[i].file, n_elements)
+        tensor_product = tensor_product_of_matrix(tensor_product, matrix)
+
+    df_tpm = apply_background(tensor_product, initial_state, candidate_system)
+
+    v = build_v(present_subsystem, future_subsystem)
+
+    global global_v 
+    global_v = v.copy()
+    global marginalized_tpm
+    marginalized_tpm = {}
+
+    present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+
+    node_states = get_first_matrices_node_state(df_tpm)
+
+    result_df = marginalize_node_states_1(df_tpm, present, future, node_states, sorted(node_states.keys()))
+    result_df = marginalize_cols(result_df, future)
+    node_states = get_matrices_node_state(result_df, future)
+
+    candidates_bipartition = []
+    candidate_bipartitions = bipartition_system(
+        result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
+    )
+    initial_state_v, _, _ = set_to_binary(global_v, v)
+    present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
+    sorted_idx = sorted(present_idx.keys())
+    label = ""
+    for idx in sorted_idx:
+        label += initial_state[idx]
+        
+    [min_emd_key, min_emd_result] = min_EMD(
+        result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
+    )
+    return [min_emd_key, min_emd_result]
+    
+
+# main()
