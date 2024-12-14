@@ -938,8 +938,11 @@ async def solve(
     result_df = marginalize_cols(result_df, future)
     node_states = get_matrices_node_state(result_df, future)
 
+    inicio = time.perf_counter()
     candidates_bipartition = [0]
     candidate_bipartitions = bipartition_system(
         result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
     )
+    fin = time.perf_counter()
+    return [candidate_bipartitions[0][0], candidate_bipartitions[0][1], fin-inicio]
 # main_2()

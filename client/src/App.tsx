@@ -1,4 +1,4 @@
-import { Button, Col, Form, FormProps, Input, Row, Upload, Card } from 'antd'
+import { Button, Col, Form, FormProps, Input, Row, Upload, Card, Radio, RadioChangeEvent } from 'antd'
 import { InboxOutlined } from '@ant-design/icons';
 import './App.css'
 import { useEffect, useState } from 'react';
@@ -7,6 +7,7 @@ import { UploadFile, UploadProps } from 'antd/es/upload';
 const { Dragger } = Upload
 
 type FieldType = {
+  strategy: number,
   initial_state: string,
   candidate_system: string,
   future_subsystem: string,
@@ -22,6 +23,7 @@ function App() {
     if (fileList.length < 2) {
       alert("Please upload at least 2 TPM files")
     }
+    setLogs([])
     setIsLoading(true)
     // console.log('Success:', values);
     // console.log('files', fileList)
@@ -78,12 +80,24 @@ function App() {
             onFinishFailed={onFinishFailed}
             autoComplete="off"
             initialValues={{
+              strategy: 1,
               initial_state: '1000000000',
               candidate_system: '1111111111',
               present_subsystem: '1111100011',
               future_subsystem: '1111100000'
             }}
           >
+            <Form.Item<FieldType>
+              label="Strategy"
+              name="strategy"
+              rules={[{ required: true, message: 'Please input strategy' }]}
+            >
+              <Radio.Group>
+                <Radio value={1}>Strategy 1</Radio>
+                <Radio value={2}>Strategy 2</Radio>
+                <Radio value={3}>Strategy 3</Radio>
+              </Radio.Group>
+            </Form.Item>
             <Form.Item<FieldType>
               label="TPMs"
             >

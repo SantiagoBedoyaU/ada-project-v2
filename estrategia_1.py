@@ -755,9 +755,11 @@ async def solve(
     node_states = get_matrices_node_state(result_df, future)
 
     candidates_bipartition = []
+    inicio = time.perf_counter()
     candidate_bipartitions = bipartition_system(
         result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
     )
+    fin = time.perf_counter()
     initial_state_v, _, _ = set_to_binary(global_v, v)
     present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
     sorted_idx = sorted(present_idx.keys())
@@ -768,6 +770,6 @@ async def solve(
     [min_emd_key, min_emd_result] = min_EMD(
         result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
     )
-    return [min_emd_key, min_emd_result]
+    return [min_emd_key, min_emd_result, fin-inicio]
     
 # main()
