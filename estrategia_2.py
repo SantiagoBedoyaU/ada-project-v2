@@ -650,8 +650,8 @@ def set_to_binary_1(set: list, present_label_len: int, future_label_len: int):
               y la segunda para el estado futuro.
 
     Example:
-        >>> binary_states = set_to_binary_1(['a', 'b', 'c_t+1'], 3, 3)
-        >>> print(binary_states)  # Output: ['110', '001']
+        >>> binary_states = set_to_binary_1(['aA', 'bA', 'bC'], 3, 3)
+        >>> print(binary_states)  # Output: ['110', '101']
     """
     abc = string.ascii_lowercase
     binary_present = list(np.binary_repr(0, present_label_len))
@@ -1190,4 +1190,4 @@ def main():
     fin = time.perf_counter()
     print("Tiempo=")
     print(fin-inicio)
-main()
+# main()

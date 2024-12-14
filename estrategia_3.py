@@ -2,11 +2,32 @@ from fastapi import UploadFile
 from pyemd import emd
 from numpy.typing import NDArray
 import numpy as np
+import random
 import pandas as pd
 import string
 import time
 
 def load_tpm(filename_tpm: str, num_elements: int):
+    """
+    Carga una matriz de transición de probabilidad (TPM) desde un archivo y genera un índice de estados.
+
+    Args:
+        filename_tpm (str): La ruta al archivo que contiene la matriz de transición de probabilidad.
+        num_elements (int): El número de elementos (o estados) que se utilizarán para generar el índice.
+
+    Returns:
+        tuple: Una tupla que contiene:
+            - pd.DataFrame: Un DataFrame que representa la matriz de transición de probabilidad, 
+              con índices y columnas correspondientes a los estados.
+            - pd.Index: Un índice de estados generado a partir del número de elementos.
+
+    Raises:
+        ValueError: Si el archivo no se puede cargar o si el número de elementos es inválido.
+    
+    Example:
+        >>> df, states = load_tpm("tpm.csv", 3)
+        >>> print(df)
+    """
     states = pd.Index(
         [np.binary_repr(i, width=num_elements)[::-1] for i in range(2**num_elements)]
     )
@@ -15,6 +36,27 @@ def load_tpm(filename_tpm: str, num_elements: int):
     return df_tpm, states
 
 def load_tpm_2(filename_tpm: str, num_elements: int):
+    """
+    Carga una matriz de transición de probabilidad (TPM) desde un archivo y genera un índice de estados.
+    Sirve para cargar matrices nodo-estado.
+
+    Args:
+        filename_tpm (str): La ruta al archivo que contiene la matriz de transición de probabilidad.
+        num_elements (int): El número de elementos (o estados) que se utilizarán para generar el índice.
+
+    Returns:
+        tuple: Una tupla que contiene:
+            - pd.DataFrame: Un DataFrame que representa la matriz de transición de probabilidad, 
+              con índices y columnas correspondientes a los estados.
+            - pd.Index: Un índice de estados generado a partir del número de elementos.
+
+    Raises:
+        ValueError: Si el archivo no se puede cargar o si el número de elementos es inválido.
+    
+    Example:
+        >>> df, states = load_tpm("tpm.csv", 3)
+        >>> print(df)
+    """
     states = pd.Index(
         [np.binary_repr(i, width=num_elements)[::-1] for i in range(2**num_elements)]
     )
@@ -33,6 +75,21 @@ def load_tpm_3(filename_tpm: str, num_elements: int):
     return df_tpm, states
 
 def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
+    """
+    Aplica condiciones de background a una matriz de transición de probabilidad (TPM) 
+    y genera un nuevo DataFrame marginalizado.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        initial_state: Estado inicial que se utilizará para filtrar los estados.
+        candidate_system: Sistema candidato que determina qué bits se consideran.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que contiene los estados filtrados y marginalizados.
+
+    Example:
+        >>> result_df = apply_background(df_tpm, '1010', '1110')
+    """
     background_condition = {
         idx: initial_state[idx]
         for idx, bit in enumerate(candidate_system)
@@ -58,6 +115,23 @@ def apply_background(df_tpm: pd.DataFrame, initial_state, candidate_system):
     return result_df
 
 def marginalize_rows(df_tpm: pd.DataFrame, str_node_state: str, present_subsystem: str):
+    """
+    Marginaliza las filas de una matriz de transición de probabilidad (TPM) 
+    según un subsistema presente, calculando el promedio de la suma de las filas.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        present_subsystem (str): Cadena binaria que indica que estados se deben mantener.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que contiene las filas marginalizadas.
+
+    Raises:
+        ValueError: Si la longitud del subsistema presente no coincide con el número de estados presente en la tpm.
+
+    Example:
+        >>> result_df = marginalize_rows(df_tpm, "110")
+    """
     key = str_node_state + present_subsystem
     if key in marginalized_tpm:
         return marginalized_tpm[key]
@@ -80,6 +154,19 @@ def marginalize_rows(df_tpm: pd.DataFrame, str_node_state: str, present_subsyste
         return result_df
 
 def reorder_little_endian(df: pd.DataFrame):
+    """
+    Reordena las filas y columnas de un DataFrame según el orden little-endian 
+    basado en sus índices y nombres de columnas, respectivamente.
+
+    Args:
+        df (pd.DataFrame): DataFrame que se desea reordenar.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame con las filas y columnas reordenadas.
+
+    Example:
+        >>> reordered_df = reorder_little_endian(df)
+    """
     def bin_to_little_endian(bin_str):
         if not bin_str or not isinstance(bin_str, str):
             return 0
@@ -97,6 +184,23 @@ def reorder_little_endian(df: pd.DataFrame):
     return df.reindex(index=new_row_order.index, columns=new_col_order.index)
 
 def marginalize_cols(df_tpm: pd.DataFrame, future_subsystem: str):
+    """
+    Marginaliza las columnas de una matriz de transición de probabilidad (TPM) 
+    según un subsistema futuro, sumando los estados futuros.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        future_subsystem (str): Cadena binaria que indica qué estados futuro se deben mantener.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que contiene las columnas marginalizadas.
+
+    Raises:
+        ValueError: Si la longitud del subsistema futuro no coincide con el número de estados futuro en la TPM.
+
+    Example:
+        >>> result_df = marginalize_cols(df_tpm, "110")
+    """
     df_tpm = df_tpm.reindex(sorted(df_tpm.columns), axis=1)
 
     n_bits = len(df_tpm.columns[0])
@@ -114,6 +218,22 @@ def marginalize_cols(df_tpm: pd.DataFrame, future_subsystem: str):
     return r
 
 def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df2: list): 
+    """
+    Calcula el producto tensorial de dos DataFrames, combinando sus índices y valores 
+    según las claves especificadas.
+
+    Args:
+        df1 (pd.DataFrame): Primer DataFrame para el producto tensorial.
+        df2 (pd.DataFrame): Segundo DataFrame para el producto tensorial.
+        keys_df1 (list): Lista de claves que representan los índices de df1.
+        keys_df2 (list): Lista de claves que representan los índices de df2.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que representa el producto tensorial de df1 y df2.
+
+    Example:
+        >>> result_df = tensor_product(df1, df2, ['a', 'b'], ['c', 'd'])
+    """
     temp_data = {}
     if df1.index.tolist()[0] == df2.index.tolist()[0]:
         initial_state_label = df1.index.tolist()
@@ -165,14 +285,26 @@ def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df
             col_key = "".join(map(str, labels_copy))
             temp_data.setdefault(row_key, {})[col_key] = result
     
-    # for elem in sorted(products.keys()):
-    #     df_result[elem] = pd.Series(products[elem])
-    
     df_result = pd.DataFrame.from_dict(temp_data, orient="index").fillna(0)
     df_result = reorder_little_endian(df_result)
     return df_result
 
 def tensor_product_of_matrix(df1: pd.DataFrame, df2: pd.DataFrame):
+    """
+    Calcula el producto tensorial de dos DataFrames, combinando columnas de cada uno.
+    Esta función se usa cuando el producto tensorial debe hacerse entre matrices con más 
+    de una fila.
+
+    Args:
+        df1 (pd.DataFrame): Primer DataFrame para el producto tensorial.
+        df2 (pd.DataFrame): Segundo DataFrame para el producto tensorial.
+
+    Returns:
+        pd.DataFrame: Un nuevo DataFrame que representa el producto tensorial de df1 y df2.
+
+    Example:
+        >>> result_df = tensor_product_of_matrix(df1, df2)
+    """
     # Diccionario para almacenar columnas temporalmente
     result_dict = {}
     for df2col in df2.columns:
@@ -212,6 +344,22 @@ def marginalize_node_states(
     initial_state: str,
     set_m: list
 ):
+    """
+    Marginaliza las nodo-estado de una matriz de transición de probabilidad (TPM) 
+    y combina los resultados en un solo DataFrame.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        node_state (dict): Diccionario que contiene los estados de los nodos.
+        set_m (list[str]): Lista de elementos que indican a quién marginalizar.
+        label (str): Estado inicial.
+
+    Returns:
+        pd.DataFrame: Un DataFrame que representa el estado marginalizado del nodo especificado.
+
+    Example:
+        >>> result = marginalize_node_states(df_tpm, node_state, set_m, label)
+    """
     results_node_states = {}
     present_idx = {idx: bit for idx, bit in enumerate(present) if bit == "1"}
     sorted_idx = sorted(present_idx.keys())
@@ -250,6 +398,21 @@ def marginalize_node_states_1(
     node_state: dict,
     set_m: list
 ):
+    """
+    Realiza la marginalización de las matrices nodo-estado en una matriz de transición de probabilidad 
+    (TPM) y combina los resultados en un solo DataFrame.
+
+    Args:
+        present (str): Estado presente que se utilizará para la marginalización.
+        node_state (dict): Diccionario que contiene las matrices nodo-estado.
+        set_m (list): Lista de elementos para marginalizar.
+
+    Returns:
+        pd.DataFrame: Un DataFrame que representa el estado marginalizado de las nodo-estado.
+
+    Example:
+        >>> result = first_marginalize_node_states(present, node_state, set_m)
+    """
     results_node_states = {}
     for elem in set_m:
         a = node_state[elem]     
@@ -262,7 +425,6 @@ def marginalize_node_states_1(
     for i in range(1, len(keys)):
         results_node_states[keys[i]] = tensor_product_of_matrix(results_node_states[keys[i-1]], results_node_states[keys[i]]) 
         first = "".join([first, keys[i]])
-        
 
     if len(results_node_states) > 0:
         marginalizacion = results_node_states[keys[-1]]
@@ -279,15 +441,30 @@ def bipartition_system(
     candidates_bipartition: list,
     node_state: dict,
 ):
-    if len(v) <= 2:
-        candidates_bipartition.append(v[-1])
-        return candidates_bipartition
-    w_1 = [v[0]]
-    w_1l = []
-    wp = [item for item in v if item not in w_1]
+    """
+    Realiza la búsqueda de la bipartición de un sistema basado en la matriz de transición de probabilidad 
+    (TPM) y sus matrices nodo-estado, buscando encontrar una aproximación a la menor perdida de información.
 
-    results_u = {}
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        v (list): Lista de nodos del sistema completo.
+        initial_state (str): Estado inicial de la TPM.
+        candidates_bipartition (list): Lista que contendrá la mejor bipartición candidata.
+        node_state (dict): Diccionario que contiene las matrices nodo-estado.
+
+    Returns:
+        list: Una lista actualizado de la mejor bipartición encontrada.
+
+    Example:
+        >>> candidates = bipartition_system(df_tpm, a, initial_state, candidates_bipartition, node_state)
+    """
+    # First config
+    v_copy = v.copy()
+    n = 1
+    w_1u = random.sample(v_copy, n)
+    n_fails = 10 * len(v_copy)
     
+    # --------------- INITIAL_STATE ------------------
     present_v, _, _ = set_to_binary(global_v, v)
     present_idx = {idx: bit for idx, bit in enumerate(present_v) if bit == "1"}
     sorted_idx = sorted(present_idx.keys())
@@ -297,85 +474,69 @@ def bipartition_system(
     
     initial_state_values = df_tpm.loc[label, :].values
     
-    while len(wp) > 0:
-        for u in wp:
-            w_1u = w_1.copy()
-            w_1u.append(u)
-            w_1up = [item for item in v if item not in w_1u]
-            
-            #----------------MARGINALIZACION W_1U ----------------
-            present, future, set_m_w1 = set_to_binary(global_v, w_1u)
-            marginalizacionW_1u = marginalize_node_states(
-                df_tpm, present, future, node_state, initial_state, set_m_w1
-            )
-            #----------------MARGINALIZACION W_1UP--------------
-            present, future, set_m_wp = set_to_binary(global_v, w_1up)
-            marginalizacionW_1up = marginalize_node_states(
-                df_tpm, present, future, node_state, initial_state, set_m_wp
-            )
-            #----------------TENSOR_PRODUCT---------------------
-            first_product_result = tensor_product(
-                marginalizacionW_1u, marginalizacionW_1up, set_m_w1, set_m_wp
-            )
-            #----------------FIRST_EMD---------------------
-            first_product_result = np.array(first_product_result).flatten().astype(np.float64)
-            initial_state_values = np.array(initial_state_values).astype(np.float64)            
-            emd1 = EMD(first_product_result, initial_state_values)
-            #------------- MARGINALIZACION U ---------------
-            up = [item for item in v if item not in [u]]
-            present, future, set_mu = set_to_binary(global_v, [u])
-            
-            marginalizacionU = marginalize_node_states(
-                df_tpm, present, future, node_state, initial_state, set_mu
-            )
-            #----------------MARGINALIZACIÓN UP ----------------
-            present, future, set_mp = set_to_binary(global_v, up)
-            marginalizacionUp = marginalize_node_states(
-                df_tpm, present, future, node_state, initial_state, set_mp
-            )
-            #----------------TENSOR_PRODUCT---------------------
-            second_product_result = tensor_product(
-                marginalizacionU, marginalizacionUp, set_mu, set_mp
-            )
-            #----------------SECOND_EMD---------------------
-            second_product_result = np.array(second_product_result).flatten().astype(np.float64)
-            emd2 = EMD(second_product_result, initial_state_values)
-            result_emd = emd1 - emd2
+    emd1 = calculate_bipartition_emd(df_tpm, v, w_1u, node_state, initial_state, initial_state_values)
+    candidates_bipartition[0] = [w_1u, emd1]
+    while n_fails > 0:
+        if n_fails % len(v_copy) == 0 and n < len(v_copy) - 1:
+            n +=1
+        w_1up = random.sample(v_copy, n)
+        emd1_p = calculate_bipartition_emd(df_tpm, v, w_1up, node_state, initial_state, initial_state_values)
+        result_emd = emd1_p - emd1
+        if result_emd < 0:
+            candidates_bipartition[0] = [w_1up, emd1_p]
+            emd1 = emd1_p
+        else:
+            n_fails -= 1
+    return 
 
-            if isinstance(u, list):
-                results_u[tuple(u)] = result_emd
-            else:
-                results_u[u] = result_emd
-
-        #-------------------RESULTS--------------------
-        min_result = min(results_u.values())
-        key = [key for key, value in results_u.items() if value == min_result][0]
-        if isinstance(key, tuple):
-            key = list(key)
-        wp.remove(key)
-        w_1.append(key)
-        w_1l.append(key)
-        results_u.clear()
-
-    candidates_bipartition.append(w_1l[-1])
-    v.remove(w_1l[-1])
-    v.remove(w_1l[-2])
-    if isinstance(w_1l[-1], list) and isinstance(w_1l[-2], list):
-        v.append(w_1l[-1] + w_1l[-2])
-
-    elif isinstance(w_1l[-2], list):
-        v.append([w_1l[-1]] + w_1l[-2])
-
-    elif isinstance(w_1l[-1], list):
-        v.append(w_1l[-1] + [w_1l[-2]])
+def calculate_bipartition_emd(df_tpm, v, subset, node_state, initial_state, initial_state_values):
+    
+    tuple_subset = tuple(subset)
+    if tuple_subset in bipartition_tpm:
+        return bipartition_tpm[tuple_subset]
     else:
-        v.append([w_1l[-1], w_1l[-2]])
-    candidates_bipartition = bipartition_system(
-        df_tpm, v, initial_state, candidates_bipartition, node_state
-    )
-    return candidates_bipartition
+        # --------------- RAMDOM_TWO_NODES ----------------
+        w_1up = [item for item in v if item not in subset]
+        #----------------MARGINALIZACION W_1U ----------------
+        present, future, set_m_w1 = set_to_binary(global_v, subset)
+        marginalizacionW_1u = marginalize_node_states(
+            df_tpm, present, future, node_state, initial_state, set_m_w1
+        )
+        #----------------MARGINALIZACION W_1UP--------------
+        present, future, set_m_wp = set_to_binary(global_v, w_1up)
+        marginalizacionW_1up = marginalize_node_states(
+            df_tpm, present, future, node_state, initial_state, set_m_wp
+        )
+        #----------------TENSOR_PRODUCT---------------------
+        first_product_result = tensor_product(
+            marginalizacionW_1u, marginalizacionW_1up, set_m_w1, set_m_wp
+        )
+        #----------------FIRST_EMD---------------------
+        first_product_result = np.array(first_product_result).flatten().astype(np.float64)
+        initial_state_values = np.array(initial_state_values).astype(np.float64)
+        emd = EMD(first_product_result, initial_state_values)
+        bipartition_tpm[tuple_subset] = emd
+        return emd
 
 def set_to_binary_1(set: list, present_label_len: int, future_label_len: int):
+    """
+    Convierte un conjunto de elementos en representaciones binarias para los estados presentes 
+    y futuros basados en la longitud de los nodos proporcionados.
+
+    Args:
+        set (list): Lista de elementos a convertir en binario. Los elementos pueden ser cadenas 
+        o listas de cadenas que contengan nodos.
+        present_label_len (int): Longitud de la representación binaria para el estado presente.
+        future_label_len (int): Longitud de la representación binaria para el estado futuro.
+
+    Returns:
+        list: Una lista que contiene dos cadenas binarias: la primera para el estado presente 
+              y la segunda para el estado futuro.
+
+    Example:
+        >>> binary_states = set_to_binary_1(['a', 'b', 'c_t+1'], 3, 3)
+        >>> print(binary_states)  # Output: ['110', '001']
+    """
     abc = string.ascii_lowercase
     binary_present = list(np.binary_repr(0, present_label_len))
     binary_future = list(np.binary_repr(0, future_label_len))
@@ -397,6 +558,24 @@ def set_to_binary_1(set: list, present_label_len: int, future_label_len: int):
     return ["".join(binary_present), "".join(binary_future)]
 
 def set_to_binary(global_v: list, subset: list):
+    """
+    Convierte un elemento y un conjunto global en representaciones binarias para los estados 
+    presentes y futuros, excluyendo el elemento especificado. Esta función se usa para representar
+    el estado binario de un nodo con respecto a todos los demás nodos
+
+    Args:
+        global_a (list): Lista de pares de elementos, donde el primer elemento representa 
+        el estado presente y el segundo el estado futuro.
+        element (str): Un elemento en forma de cadena que se debe excluir del conjunto global.
+
+    Returns:
+        tuple: Una tupla que contiene dos cadenas binarias: la primera para el estado presente 
+               y la segunda para el estado futuro de la arista.
+
+    Example:
+        >>> binary_states = set_to_binary(['at', 'bt', 'ct', 'at+1', 'bt+1', 'ct+1'], 'at+1')
+        >>> print(binary_states)  # Output: ('100', '000')
+    """
     positions_to_keep_present = []
     positions_to_keep_future = []
     group_t1_in_subset = []
@@ -462,6 +641,25 @@ def set_to_binary(global_v: list, subset: list):
     return ["".join(binary_present), "".join(binary_future), group_t1_in_subset_letters]
 
 def get_matrices_node_state(df_tpm: pd.DataFrame, future_subsystem: list):
+    """
+    Genera matrices nodos-estado a partir de un DataFrame de transición de probabilidad 
+    y un subsistema futuro especificado.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+        future_subsystem (list): Lista que indica el estado futuro de cada nodo, donde '1' 
+                                 representa un estado activo.
+
+    Returns:
+        dict: Un diccionario donde las claves son letras (a, b, c, ...) y los valores son 
+              matrices de estado correspondientes a cada nodo activo.
+
+    Example:
+        >>> import pandas as pd
+        >>> df = pd.DataFrame([[0.1, 0.9], [0.4, 0.6]], columns=['A', 'B'])
+        >>> states = get_matrices_node_state(df, ['1', '0'])
+        >>> print(states)  # Output: {'a': matrix_for_a}
+    """
     matrices_node_state = {}
     abc = string.ascii_lowercase
     cols = "0" * len(df_tpm.columns[0])
@@ -475,6 +673,23 @@ def get_matrices_node_state(df_tpm: pd.DataFrame, future_subsystem: list):
     return matrices_node_state
      
 def get_first_matrices_node_state(df_tpm: pd.DataFrame):
+    """
+    Genera matrices nodo-estado inicial del sistema completo. Esta función solo se usa para el momento
+    de marginalización de los subsistemas presente y futuro.
+
+    Args:
+        df_tpm (pd.DataFrame): DataFrame que representa la matriz de transición de probabilidad.
+
+    Returns:
+        dict: Un diccionario donde las claves son letras (a, b, c, ...) y los valores son 
+              matrices de estado correspondientes a cada nodo.
+
+    Example:
+        >>> import pandas as pd
+        >>> df = pd.DataFrame([[0.1, 0.9], [0.4, 0.6]], columns=['A', 'B'])
+        >>> states = get_first_matrices_node_state(df)
+        >>> print(states)  # Output: {'a': matrix_for_a, 'b': matrix_for_b, ...}
+    """
     matrices_node_state = {}
     abc = string.ascii_lowercase
     cols = "0" * len(df_tpm.columns[0])
@@ -487,6 +702,24 @@ def get_first_matrices_node_state(df_tpm: pd.DataFrame):
     return matrices_node_state
 
 def build_v(present_subsystem: str, future_subsystem: str):
+    """
+    Construye una lista de nodos representados en letras a partir de los subsistemas presentes y futuros
+    representados en binarios.
+
+    Args:
+        present_subsystem (str): Cadena que representa el estado presente, donde '1' indica 
+                                 un estado activo.
+        future_subsystem (str): Cadena que representa el estado futuro, donde '1' indica 
+                                un estado activo.
+
+    Returns:
+        list: Lista de variables de estado en el formato 'x_t' y 'x_t+1', donde 'x' es la 
+              letra correspondiente al estado activo.
+
+    Example:
+        >>> v = build_v('110', '001')
+        >>> print(v)  # Output: ['a_t', 'b_t', 'c_t+1']
+    """
     v = []
     abc = string.ascii_lowercase
     for idx, bit in enumerate(present_subsystem):
@@ -496,41 +729,6 @@ def build_v(present_subsystem: str, future_subsystem: str):
         if bit == "1":
             v.append(f"{abc[idx]}_t+1")
     return v
-
-def min_EMD(
-    df_tpm: pd.DataFrame, v: list[str], bipartion_list: list[str], label: str, node_states, initial_state
-):
-    initial_state_values = df_tpm.loc[label, :].values
-    initial_state_values = np.array(initial_state_values).astype(np.float64)
-    
-    emd_results = {}
-    for elem in bipartion_list:
-        elemP = []
-        if isinstance(elem, list):
-            for e in v:
-                if e not in elem:
-                    elemP.append(e)
-        else:
-            elemP = [e for e in v if e != elem]
-        #-------------------------- Marginalización Elem ---------------------------
-        presentElem, futureElem, set_m_elem = set_to_binary(global_v, [elem])
-        marginalizacionElem = marginalize_node_states(df_tpm, presentElem, futureElem, node_states, initial_state, set_m_elem)
-        #-------------------------- Marginalización Elemp --------------------------
-        presentElemP, futureElemP, set_m_elemp = set_to_binary(global_v, [elemP])
-        marginalizacionElemP = marginalize_node_states(df_tpm, presentElemP, futureElemP, node_states, initial_state, set_m_elemp)
-        #--------------------- TENSOR_PRODUCT --------------------------
-        tensor_result = tensor_product(
-            marginalizacionElem, marginalizacionElemP, set_m_elem, set_m_elemp
-        )
-        tensor_result_2 = np.array(tensor_result).flatten().astype(np.float64)
-        #--------------------- EMD --------------------------
-        emd = EMD(tensor_result_2, initial_state_values)
-        emd_results[tuple(elem)] = emd
-    min_emd_result = min(emd_results.values())
-    min_emd_key = [
-        key for key, value in emd_results.items() if value == min_emd_result
-    ][0]
-    return [min_emd_key, min_emd_result]
 
 # caso de prueba red 10
 def main():
@@ -566,6 +764,8 @@ def main():
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_8)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_9)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_10)
+    
+    inicio = time.perf_counter()
 
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
     
@@ -575,6 +775,8 @@ def main():
     global_v = v.copy()
     global marginalized_tpm
     marginalized_tpm = {}
+    global bipartition_tpm
+    bipartition_tpm = {}
     
     present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
 
@@ -584,28 +786,17 @@ def main():
     result_df = marginalize_cols(result_df, future)
     node_states = get_matrices_node_state(result_df, future)
     
-    candidates_bipartition = []
+    candidates_bipartition = [0]
     candidate_bipartitions = bipartition_system(
         result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
     )
-    initial_state_v, _, _ = set_to_binary(global_v, v)
-    present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-    sorted_idx = sorted(present_idx.keys())
-    label = ""
-    for idx in sorted_idx:
-        label += initial_state[idx]
-        
-    [min_emd_key, min_emd_result] = min_EMD(
-        result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
-    )
-    print(f"{min_emd_key=}, {min_emd_result=}")
+    print(candidate_bipartitions[0])
     fin = time.perf_counter()
     print("Tiempo=")
     print(fin-inicio)
 
 # casos de prueba primer excel 
 def main_2():
-    inicio = time.perf_counter()
     [
         initial_state_str,
         candidate_system_str,
@@ -627,7 +818,7 @@ def main_2():
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
 
-    # print(tensor_flow)
+    inicio = time.perf_counter()
     print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
     
@@ -637,6 +828,8 @@ def main_2():
     global_v = v.copy()
     global marginalized_tpm
     marginalized_tpm = {}
+    global bipartition_tpm
+    bipartition_tpm = {}
     
     present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
 
@@ -646,25 +839,14 @@ def main_2():
     result_df = marginalize_cols(result_df, future)
     node_states = get_matrices_node_state(result_df, future)
     
-    candidates_bipartition = []
+    candidates_bipartition = [0]
     candidate_bipartitions = bipartition_system(
         result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
     )
-    initial_state_v, _, _ = set_to_binary(global_v, v)
-    present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-    sorted_idx = sorted(present_idx.keys())
-    label = ""
-    for idx in sorted_idx:
-        label += initial_state[idx]
-        
-    [min_emd_key, min_emd_result] = min_EMD(
-        result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
-    )
-    print(f"{min_emd_key=}, {min_emd_result=}")
+    print(candidate_bipartitions[0])
     fin = time.perf_counter()
     print("Tiempo=")
     print(fin-inicio)
-    
 
 ##############################################
 # Caso de prueba red 15
@@ -745,6 +927,8 @@ async def solve(
     global_v = v.copy()
     global marginalized_tpm
     marginalized_tpm = {}
+    global bipartition_tpm
+    bipartition_tpm = {}
 
     present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
 
@@ -754,20 +938,8 @@ async def solve(
     result_df = marginalize_cols(result_df, future)
     node_states = get_matrices_node_state(result_df, future)
 
-    candidates_bipartition = []
+    candidates_bipartition = [0]
     candidate_bipartitions = bipartition_system(
         result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
     )
-    initial_state_v, _, _ = set_to_binary(global_v, v)
-    present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-    sorted_idx = sorted(present_idx.keys())
-    label = ""
-    for idx in sorted_idx:
-        label += initial_state[idx]
-        
-    [min_emd_key, min_emd_result] = min_EMD(
-        result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
-    )
-    return [min_emd_key, min_emd_result]
-    
-# main()
+# main_2()
