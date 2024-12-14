@@ -487,7 +487,7 @@ def bipartition_system(
             emd1 = emd1_p
         else:
             n_fails -= 1
-    return 
+    return candidates_bipartition
 
 def calculate_bipartition_emd(df_tpm, v, subset, node_state, initial_state, initial_state_values):
     
