@@ -379,7 +379,7 @@ def marginalize_node_states(
     if len(keys) > 0:
         first = keys[0]
     for i in range(1, len(keys)):
-        results_node_states[keys[i]] = tensor_product(results_node_states[keys[i-1]], results_node_states[keys[i]], list(first), list(keys[i])) 
+        results_node_states[keys[i]] = tensor_product(results_node_states[keys[i-1]], results_node_states[keys[i]], list(first), list(keys[i]))
         first = "".join([first, keys[i]])
 
     if len(results_node_states) > 0:
@@ -490,7 +490,6 @@ def bipartition_system(
     return candidates_bipartition
 
 def calculate_bipartition_emd(df_tpm, v, subset, node_state, initial_state, initial_state_values):
-    
     tuple_subset = tuple(subset)
     if tuple_subset in bipartition_tpm:
         return bipartition_tpm[tuple_subset]
