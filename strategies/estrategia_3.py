@@ -464,7 +464,7 @@ def bipartition_system(
     v_copy = v.copy()
     n = int(len(v_copy) / 2)
     w_1u = np.random.choice(v_copy, size=n, replace=False)
-    n_fails = 50 * len(v_copy)
+    n_fails = 20 * len(v_copy)
     ic(n_fails, len(v_copy))
 
     # --------------- INITIAL_STATE ------------------

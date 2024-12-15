@@ -1,10 +1,11 @@
-import { Button, Col, Form, FormProps, Input, Row, Upload, Card, Radio, RadioChangeEvent, ConfigProvider, theme } from 'antd'
+import { Button, Col, Form, FormProps, Input, Row, Upload, Card, Radio, ConfigProvider, theme } from 'antd'
 import { InboxOutlined } from '@ant-design/icons';
 import './App.css'
-import { useEffect, useState } from 'react';
+import { ChangeEvent, useState } from 'react';
 import { UploadFile, UploadProps } from 'antd/es/upload';
 
 const { Dragger } = Upload
+const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
 type FieldType = {
   strategy: number,
@@ -18,6 +19,10 @@ function App() {
   const [fileList, setFileList] = useState<UploadFile<any>[]>([]);
   const [logs, setLogs] = useState<String[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [initialStateStr, setInitialStateStr] = useState('')
+  const [candidateSystemStr, setCandidateSystem] = useState('')
+  const [presentSubsystemStr, setPresentSubsystemStr] = useState('')
+  const [futureSubsystemStr, setFutureSubsystemStr] = useState('')
 
   const onFinish: FormProps<FieldType>['onFinish'] = async (values) => {
     if (fileList.length < 2) {
@@ -68,6 +73,54 @@ function App() {
     },
   };
 
+  const onChangeInitialState = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    const digits = val.split("")
+    let string_digit = ''
+    for (let i = 0; i < digits.length; i++) {
+      if (digits[i] === '1'){
+        string_digit+=abc[i]
+      }
+    }
+    setInitialStateStr(string_digit)
+  }
+
+  const onChangeCandidateSystem = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    const digits = val.split("")
+    let string_digit = ''
+    for (let i = 0; i < digits.length; i++) {
+      if (digits[i] === '1'){
+        string_digit+=abc[i]
+      }
+    }
+    setCandidateSystem(string_digit)
+  }
+
+  const onChangePresentSubsystem = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    const digits = val.split("")
+    let string_digit = ''
+    for (let i = 0; i < digits.length; i++) {
+      if (digits[i] === '1'){
+        string_digit+=abc[i]
+      }
+    }
+    setPresentSubsystemStr(string_digit)
+  }
+
+  const onChangeFutureSubsystem = (e: ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    const digits = val.split("")
+    let string_digit = ''
+    for (let i = 0; i < digits.length; i++) {
+      if (digits[i] === '1'){
+        string_digit+=abc[i]
+      }
+    }
+    setFutureSubsystemStr(string_digit)
+  }
+
   return (
     <>
       <ConfigProvider
@@ -85,11 +138,7 @@ function App() {
               onFinishFailed={onFinishFailed}
               autoComplete="off"
               initialValues={{
-                strategy: 1,
-                initial_state: '1000000000',
-                candidate_system: '1111111111',
-                present_subsystem: '1111100011',
-                future_subsystem: '1111100000'
+                strategy: 1
               }}
             >
               <Form.Item<FieldType>
@@ -119,8 +168,9 @@ function App() {
                     label="Initial State"
                     name="initial_state"
                     rules={[{ required: true, message: 'Please input initial state!' }]}
+                    extra={initialStateStr}
                   >
-                    <Input />
+                    <Input onChange={onChangeInitialState} />
                   </Form.Item>
                 </Col>
                 <Col>
@@ -128,8 +178,9 @@ function App() {
                     label="Candidate System"
                     name="candidate_system"
                     rules={[{ required: true, message: 'Please input candidate system!' }]}
+                    extra={candidateSystemStr}
                   >
-                    <Input />
+                    <Input onChange={onChangeCandidateSystem} />
                   </Form.Item>
                 </Col>
               </Row>
@@ -140,8 +191,9 @@ function App() {
                     label="Present Subsytem"
                     name="present_subsystem"
                     rules={[{ required: true, message: 'Please input present subsystem!' }]}
+                    extra={presentSubsystemStr}
                   >
-                    <Input />
+                    <Input onChange={onChangePresentSubsystem} />
                   </Form.Item>
                 </Col>
                 <Col>
@@ -149,8 +201,9 @@ function App() {
                     label="Future Subsytem"
                     name="future_subsystem"
                     rules={[{ required: true, message: 'Please input future subsystem!' }]}
+                    extra={futureSubsystemStr}
                   >
-                    <Input />
+                    <Input onChange={onChangeFutureSubsystem} />
                   </Form.Item>
                 </Col>
               </Row>
