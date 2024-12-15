@@ -1,3 +1,4 @@
+from fastapi import UploadFile
 import numpy as np
 import pandas as pd
 from pyemd import emd
@@ -1074,16 +1075,16 @@ def main_proof_cases():
         candidate_system_str,
         present_subsystem_str,
         future_subsystem_str,
-    ] = np.loadtxt("system_values_2.csv", delimiter=",", skiprows=1, dtype=str)
+    ] = np.loadtxt("./red5/system_values.csv", delimiter=",", skiprows=1, dtype=str)
     initial_state = initial_state_str.strip()
     candidate_system = candidate_system_str.strip()
     present_subsystem = present_subsystem_str.strip()
     future_subsystem = future_subsystem_str.strip()
-    matrix_1, _ = load_tpm_2("matrix_guia_2.csv", len(candidate_system))
-    matrix_2, _ = load_tpm_2("matrix_guia_3.csv", len(candidate_system))
-    matrix_3, _ = load_tpm_2("matrix_guia_4.csv", len(candidate_system))
-    matrix_4, _ = load_tpm_2("matrix_guia_5.csv", len(candidate_system))
-    matrix_5, _ = load_tpm_2("matrix_guia_6.csv", len(candidate_system))
+    matrix_1, _ = load_tpm_2("./red5/state_node_a.csv", len(candidate_system))
+    matrix_2, _ = load_tpm_2("./red5/state_node_b.csv", len(candidate_system))
+    matrix_3, _ = load_tpm_2("./red5/state_node_c.csv", len(candidate_system))
+    matrix_4, _ = load_tpm_2("./red5/state_node_d.csv", len(candidate_system))
+    matrix_5, _ = load_tpm_2("./red5/state_node_e.csv", len(candidate_system))
     
     tensor_flow = tensor_product_of_matrix(matrix_1, matrix_2)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
@@ -1132,21 +1133,21 @@ def main():
         candidate_system_str,
         present_subsystem_str,
         future_subsystem_str,
-    ] = np.loadtxt("system_values_4.csv", delimiter=",", skiprows=1, dtype=str)
+    ] = np.loadtxt("./red10/system_values.csv", delimiter=",", skiprows=1, dtype=str)
     initial_state = initial_state_str.strip()
     candidate_system = candidate_system_str.strip()
     present_subsystem = present_subsystem_str.strip()
     future_subsystem = future_subsystem_str.strip()
-    matrix_1, _ = load_tpm_2("./red2/state_node_a.csv", len(candidate_system))
-    matrix_2, _ = load_tpm_2("./red2/state_node_b.csv", len(candidate_system))
-    matrix_3, _ = load_tpm_2("./red2/state_node_c.csv", len(candidate_system))
-    matrix_4, _ = load_tpm_2("./red2/state_node_d.csv", len(candidate_system))
-    matrix_5, _ = load_tpm_2("./red2/state_node_e.csv", len(candidate_system))
-    matrix_6, _ = load_tpm_2("./red2/state_node_f.csv", len(candidate_system))
-    matrix_7, _ = load_tpm_2("./red2/state_node_g.csv", len(candidate_system))
-    matrix_8, _ = load_tpm_2("./red2/state_node_h.csv", len(candidate_system))
-    matrix_9, _ = load_tpm_2("./red2/state_node_i.csv", len(candidate_system))
-    matrix_10, _ = load_tpm_2("./red2/state_node_j.csv", len(candidate_system))
+    matrix_1, _ = load_tpm_2("./red10/state_node_a.csv", len(candidate_system))
+    matrix_2, _ = load_tpm_2("./red10/state_node_b.csv", len(candidate_system))
+    matrix_3, _ = load_tpm_2("./red10/state_node_c.csv", len(candidate_system))
+    matrix_4, _ = load_tpm_2("./red10/state_node_d.csv", len(candidate_system))
+    matrix_5, _ = load_tpm_2("./red10/state_node_e.csv", len(candidate_system))
+    matrix_6, _ = load_tpm_2("./red10/state_node_f.csv", len(candidate_system))
+    matrix_7, _ = load_tpm_2("./red10/state_node_g.csv", len(candidate_system))
+    matrix_8, _ = load_tpm_2("./red10/state_node_h.csv", len(candidate_system))
+    matrix_9, _ = load_tpm_2("./red10/state_node_i.csv", len(candidate_system))
+    matrix_10, _ = load_tpm_2("./red10/state_node_j.csv", len(candidate_system))
     
     tensor_flow = tensor_product_of_matrix(matrix_1, matrix_2)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
@@ -1190,4 +1191,51 @@ def main():
     fin = time.perf_counter()
     print("Tiempo=")
     print(fin-inicio)
+
+async def solve(
+    tpms: list[UploadFile], 
+    initial_state: str, 
+    candidate_system: str, 
+    present_subsystem: str,
+    future_subsystem: str,
+):
+    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
+    n_elements = len(candidate_system)
+    matrix1, _ = load_tpm_2(tpms[0].file, n_elements)
+    matrix2, _ = load_tpm_2(tpms[1].file, n_elements)
+    tensor_product = tensor_product_of_matrix(matrix1, matrix2)
+    for i in range(2, len(tpms)):
+        matrix, _ = load_tpm_2(tpms[i].file, n_elements)
+        tensor_product = tensor_product_of_matrix(tensor_product, matrix)
+
+    df_tpm = apply_background(tensor_product, initial_state, candidate_system)
+
+    v = build_v(present_subsystem, future_subsystem)
+    a = build_a(present_subsystem, future_subsystem)
+
+    global global_a
+    global_a = a.copy()
+    global marginalized_tpm
+    marginalized_tpm = {}
+    present_global, future_global, _ = set_to_binary_2(a, a)
+    global global_adjacency_matrix 
+    global_adjacency_matrix = np.ones((len(present_global), len(future_global)))
+
+    present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+
+    node_states = get_first_matrices_node_state(df_tpm)
+
+    result_df = first_marginalize_node_states(present, node_states, sorted(node_states.keys()))
+    result_df = marginalize_cols(result_df, future)
+    node_states = get_matrices_node_state(result_df, future)
+    
+    candidates_bipartition = {}
+    candidates_bipartition['0'] = [[], 10000]
+    inicio = time.perf_counter()
+    candidate_bipartitions = bipartition_system(
+        result_df.copy(), a.copy(), initial_state, candidates_bipartition, node_states
+    )
+    fin = time.perf_counter()
+
+    return [candidate_bipartitions['0'][0], candidate_bipartitions['0'][1], fin-inicio]
 # main()
