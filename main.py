@@ -1,10 +1,9 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Annotated
-from estrategia_1 import solve as solve1
-from estrategia_2 import solve as solve2
-from estrategia_3 import solve as solve3
-import time
+from strategies.estrategia_1 import solve as solve1
+from strategies.estrategia_2 import solve as solve2
+from strategies.estrategia_3 import solve as solve3
 
 app = FastAPI()
 origins = ["*"]
