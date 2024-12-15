@@ -381,7 +381,7 @@ def marginalize_node_states(
     if len(keys) > 0:
         first = keys[0]
     for i in range(1, len(keys)):
-        results_node_states[keys[i]] = tensor_product(results_node_states[keys[i-1]], results_node_states[keys[i]], list(first), list(keys[i])) 
+        results_node_states[keys[i]] = tensor_product(results_node_states[keys[i-1]], results_node_states[keys[i]], list(first), list(keys[i]))
         first = "".join([first, keys[i]])
 
     if len(results_node_states) > 0:
