@@ -1,4 +1,4 @@
-import { Button, Col, Form, FormProps, Input, Row, Upload, Card, Radio, RadioChangeEvent } from 'antd'
+import { Button, Col, Form, FormProps, Input, Row, Upload, Card, Radio, RadioChangeEvent, ConfigProvider, theme } from 'antd'
 import { InboxOutlined } from '@ant-design/icons';
 import './App.css'
 import { useEffect, useState } from 'react';
@@ -70,102 +70,108 @@ function App() {
 
   return (
     <>
-      <Row justify='center' style={{ width: '90%', margin: '0 auto' }}>
-        <Col span={10} style={{ margin: '0 20px' }}>
-          <h2>ADA</h2>
-          <Form
-            name="basic"
-            layout='vertical'
-            onFinish={onFinish}
-            onFinishFailed={onFinishFailed}
-            autoComplete="off"
-            initialValues={{
-              strategy: 1,
-              initial_state: '1000000000',
-              candidate_system: '1111111111',
-              present_subsystem: '1111100011',
-              future_subsystem: '1111100000'
-            }}
-          >
-            <Form.Item<FieldType>
-              label="Strategy"
-              name="strategy"
-              rules={[{ required: true, message: 'Please input strategy' }]}
+      <ConfigProvider
+        theme={{
+          algorithm: theme.darkAlgorithm
+        }}
+      >
+        <Row justify='center' style={{ width: '90%', margin: '0 auto' }}>
+          <Col span={10} style={{ margin: '0 20px' }}>
+            <h2>ADA</h2>
+            <Form
+              name="basic"
+              layout='vertical'
+              onFinish={onFinish}
+              onFinishFailed={onFinishFailed}
+              autoComplete="off"
+              initialValues={{
+                strategy: 1,
+                initial_state: '1000000000',
+                candidate_system: '1111111111',
+                present_subsystem: '1111100011',
+                future_subsystem: '1111100000'
+              }}
             >
-              <Radio.Group>
-                <Radio value={1}>Strategy 1</Radio>
-                <Radio value={2}>Strategy 2</Radio>
-                <Radio value={3}>Strategy 3</Radio>
-              </Radio.Group>
-            </Form.Item>
-            <Form.Item<FieldType>
-              label="TPMs"
-            >
-              <Dragger {...props}>
-                <p className="ant-upload-drag-icon">
-                  <InboxOutlined />
-                </p>
-                <p className="ant-upload-text">Click or drag file to this area to upload TPM files</p>
-              </Dragger>
-            </Form.Item>
-            <Row justify='start'>
-              <Col style={{ margin: '0 10px' }}>
-                <Form.Item<FieldType>
-                  label="Initial State"
-                  name="initial_state"
-                  rules={[{ required: true, message: 'Please input initial state!' }]}
-                >
-                  <Input />
-                </Form.Item>
-              </Col>
-              <Col>
-                <Form.Item<FieldType>
-                  label="Candidate System"
-                  name="candidate_system"
-                  rules={[{ required: true, message: 'Please input candidate system!' }]}
-                >
-                  <Input />
-                </Form.Item>
-              </Col>
-            </Row>
+              <Form.Item<FieldType>
+                label="Strategy"
+                name="strategy"
+                rules={[{ required: true, message: 'Please input strategy' }]}
+              >
+                <Radio.Group>
+                  <Radio value={1}>Strategy 1</Radio>
+                  <Radio value={2}>Strategy 2</Radio>
+                  <Radio value={3}>Strategy 3</Radio>
+                </Radio.Group>
+              </Form.Item>
+              <Form.Item<FieldType>
+                label="TPMs"
+              >
+                <Dragger {...props}>
+                  <p className="ant-upload-drag-icon">
+                    <InboxOutlined />
+                  </p>
+                  <p className="ant-upload-text">Click or drag file to this area to upload TPM files</p>
+                </Dragger>
+              </Form.Item>
+              <Row justify='start'>
+                <Col style={{ margin: '0 10px' }}>
+                  <Form.Item<FieldType>
+                    label="Initial State"
+                    name="initial_state"
+                    rules={[{ required: true, message: 'Please input initial state!' }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col>
+                  <Form.Item<FieldType>
+                    label="Candidate System"
+                    name="candidate_system"
+                    rules={[{ required: true, message: 'Please input candidate system!' }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
 
-            <Row>
-              <Col style={{ margin: '0 10px' }}>
-                <Form.Item<FieldType>
-                  label="Present Subsytem"
-                  name="present_subsystem"
-                  rules={[{ required: true, message: 'Please input present subsystem!' }]}
-                >
-                  <Input />
-                </Form.Item>
-              </Col>
-              <Col>
-                <Form.Item<FieldType>
-                  label="Future Subsytem"
-                  name="future_subsystem"
-                  rules={[{ required: true, message: 'Please input future subsystem!' }]}
-                >
-                  <Input />
-                </Form.Item>
-              </Col>
-            </Row>
+              <Row>
+                <Col style={{ margin: '0 10px' }}>
+                  <Form.Item<FieldType>
+                    label="Present Subsytem"
+                    name="present_subsystem"
+                    rules={[{ required: true, message: 'Please input present subsystem!' }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col>
+                  <Form.Item<FieldType>
+                    label="Future Subsytem"
+                    name="future_subsystem"
+                    rules={[{ required: true, message: 'Please input future subsystem!' }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </Col>
+              </Row>
 
-            <Form.Item label={null}>
-              <Button loading={isLoading} type="primary" htmlType="submit" block>
-                Submit
-              </Button>
-            </Form.Item>
-          </Form>
-        </Col>
-        <Col span={6}>
-          <h2>Results</h2>
-          <Card style={{ height: '700px', maxHeight: '700px', overflow: 'auto' }}>
-            {logs.map((log, idx) => (
-              <code style={{ display: 'block' }} key={idx}>{log}</code>
-            ))}
-          </Card>
-        </Col>
-      </Row>
+              <Form.Item label={null}>
+                <Button loading={isLoading} type="primary" htmlType="submit" block>
+                  Submit
+                </Button>
+              </Form.Item>
+            </Form>
+          </Col>
+          <Col span={6}>
+            <h2>Results</h2>
+            <Card style={{ height: '700px', maxHeight: '700px', overflow: 'auto' }}>
+              {logs.map((log, idx) => (
+                <code style={{ display: 'block' }} key={idx}>{log}</code>
+              ))}
+            </Card>
+          </Col>
+        </Row>
+      </ConfigProvider>
     </>
   )
 }

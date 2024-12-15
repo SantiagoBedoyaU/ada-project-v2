@@ -2,10 +2,12 @@ from fastapi import UploadFile
 from pyemd import emd
 from numpy.typing import NDArray
 import numpy as np
-import random
 import pandas as pd
 import string
 import time
+from threading import Thread
+from icecream import ic
+
 
 def load_tpm(filename_tpm: str, num_elements: int):
     """
@@ -460,10 +462,11 @@ def bipartition_system(
     """
     # First config
     v_copy = v.copy()
-    n = 1
-    w_1u = random.sample(v_copy, n)
-    n_fails = 10 * len(v_copy)
-    
+    n = int(len(v_copy) / 2)
+    w_1u = np.random.choice(v_copy, size=n, replace=False)
+    n_fails = 50 * len(v_copy)
+    ic(n_fails, len(v_copy))
+
     # --------------- INITIAL_STATE ------------------
     present_v, _, _ = set_to_binary(global_v, v)
     present_idx = {idx: bit for idx, bit in enumerate(present_v) if bit == "1"}
@@ -473,24 +476,48 @@ def bipartition_system(
         label += initial_state[idx]
     
     initial_state_values = df_tpm.loc[label, :].values
+
+    request_threads = {}
     
     emd1 = calculate_bipartition_emd(df_tpm, v, w_1u, node_state, initial_state, initial_state_values)
     candidates_bipartition[0] = [w_1u, emd1]
     while n_fails > 0:
-        if n_fails % len(v_copy) == 0 and n < len(v_copy) - 1:
-            n +=1
-        w_1up = random.sample(v_copy, n)
-        emd1_p = calculate_bipartition_emd(df_tpm, v, w_1up, node_state, initial_state, initial_state_values)
-        result_emd = emd1_p - emd1
-        if result_emd < 0:
-            candidates_bipartition[0] = [w_1up, emd1_p]
-            emd1 = emd1_p
-        else:
-            n_fails -= 1
-    return candidates_bipartition
+        if n_fails % len(v_copy) == 0 and n > 1:
+            n -=1
+        w_1up = np.random.choice(v_copy, size=n, replace=False)
+        key = tuple(w_1up)
+        request_threads[key] = Thread(target=calculate_bipartition_emd, kwargs={
+            'df_tpm': df_tpm,
+            'v': v,
+            'subset': w_1up,
+            'node_state': node_state,
+            'initial_state': initial_state,
+            'initial_state_values': initial_state_values,
+        })
+        request_threads[key].start()
+        n_fails-=1
+        # emd1_p = calculate_bipartition_emd(df_tpm, v, w_1up, node_state, initial_state, initial_state_values)
+        # result_emd = emd1_p - emd1
+        # if result_emd < 0:
+        #     candidates_bipartition[0] = [w_1up, emd1_p]
+        #     emd1 = emd1_p
+        # else:
+        #     n_fails-=1
+
+    while True:
+        request_threads = clean_old_request_threads(request_threads)
+        if len(request_threads) < 1:
+            break
+    # return candidates_bipartition
+
+def clean_old_request_threads(request_threads):
+    for key, value in request_threads.copy().items():
+        if not value.is_alive():
+            del request_threads[key]
+
+    return request_threads
 
 def calculate_bipartition_emd(df_tpm, v, subset, node_state, initial_state, initial_state_values):
-    
     tuple_subset = tuple(subset)
     if tuple_subset in bipartition_tpm:
         return bipartition_tpm[tuple_subset]
@@ -516,7 +543,6 @@ def calculate_bipartition_emd(df_tpm, v, subset, node_state, initial_state, init
         initial_state_values = np.array(initial_state_values).astype(np.float64)
         emd = EMD(first_product_result, initial_state_values)
         bipartition_tpm[tuple_subset] = emd
-        return emd
 
 def set_to_binary_1(set: list, present_label_len: int, future_label_len: int):
     """
@@ -818,7 +844,6 @@ def main_2():
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
 
-    inicio = time.perf_counter()
     print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
     
@@ -840,10 +865,17 @@ def main_2():
     node_states = get_matrices_node_state(result_df, future)
     
     candidates_bipartition = [0]
+    inicio = time.perf_counter()
     candidate_bipartitions = bipartition_system(
         result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
     )
-    print(candidate_bipartitions[0])
+    ic(bipartition_tpm)
+    # print(candidate_bipartitions[0])
+    bestEMD = sorted(bipartition_tpm.values()).pop(0)
+    value = {i for i in bipartition_tpm if bipartition_tpm[i] == bestEMD}
+    ic(value, len(value))
+    ic(bestEMD)
+    
     fin = time.perf_counter()
     print("Tiempo=")
     print(fin-inicio)
@@ -944,5 +976,9 @@ async def solve(
         result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
     )
     fin = time.perf_counter()
-    return [candidate_bipartitions[0][0], candidate_bipartitions[0][1], fin-inicio]
+    bestEMD = sorted(bipartition_tpm.values()).pop(0)
+    value = {i for i in bipartition_tpm if bipartition_tpm[i] == bestEMD}
+    ic(value, len(value))
+    ic(bestEMD)
+    return [value, bestEMD, fin-inicio]
 # main_2()
