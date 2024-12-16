@@ -7,6 +7,7 @@ import string
 import time
 from threading import Thread
 from icecream import ic
+import csv
 
 
 def load_tpm(filename_tpm: str, num_elements: int):
@@ -822,29 +823,25 @@ def main():
     print(fin-inicio)
 
 # casos de prueba primer excel 
-def main_2():
-    [
-        initial_state_str,
-        candidate_system_str,
-        present_subsystem_str,
-        future_subsystem_str,
-    ] = np.loadtxt("./red5/system_values.csv", delimiter=",", skiprows=1, dtype=str)
+def main_2(initial_state_str, candidate_system_str, present_subsystem_str, future_subsystem_str,):
     initial_state = initial_state_str.strip()
     candidate_system = candidate_system_str.strip()
     present_subsystem = present_subsystem_str.strip()
     future_subsystem = future_subsystem_str.strip()
-    matrix_1, _ = load_tpm_2("./red5/state_node_a.csv", len(candidate_system))
-    matrix_2, _ = load_tpm_2("./red5/state_node_b.csv", len(candidate_system))
-    matrix_3, _ = load_tpm_2("./red5/state_node_c.csv", len(candidate_system))
-    matrix_4, _ = load_tpm_2("./red5/state_node_d.csv", len(candidate_system))
-    matrix_5, _ = load_tpm_2("./red5/state_node_e.csv", len(candidate_system))
+    matrix_1, _ = load_tpm_2("./red6/state_node_a.csv", len(candidate_system))
+    matrix_2, _ = load_tpm_2("./red6/state_node_b.csv", len(candidate_system))
+    matrix_3, _ = load_tpm_2("./red6/state_node_c.csv", len(candidate_system))
+    matrix_4, _ = load_tpm_2("./red6/state_node_d.csv", len(candidate_system))
+    matrix_5, _ = load_tpm_2("./red6/state_node_e.csv", len(candidate_system))
+    matrix_6, _ = load_tpm_2("./red6/state_node_f.csv", len(candidate_system))
     
     tensor_flow = tensor_product_of_matrix(matrix_1, matrix_2)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
+    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_6)
 
-    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
+    # print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
     
     v = build_v(present_subsystem, future_subsystem)
@@ -877,8 +874,9 @@ def main_2():
     ic(bestEMD)
     
     fin = time.perf_counter()
-    print("Tiempo=")
-    print(fin-inicio)
+    # print("Tiempo=")
+    # print(fin-inicio)
+    return [str(value), bestEMD, fin-inicio]
 
 ##############################################
 # Caso de prueba red 15
@@ -981,4 +979,45 @@ async def solve(
     ic(value, len(value))
     ic(bestEMD)
     return [value, bestEMD, fin-inicio]
-# main_2()
+# main()
+
+from itertools import combinations
+
+def generar_combinaciones():
+    # Arreglos iniciales
+    arreglo1 = ['a_t', 'b_t', 'c_t', 'd_t', 'e_t', 'f_t']
+    arreglo2 = ['a_t+1', 'b_t+1', 'c_t+1', 'd_t+1', 'e_t+1', 'f_t+1']
+
+    # Combinar ambos arreglos en uno solo
+    combinados = arreglo1 + arreglo2
+
+    # Generar todas las combinaciones únicas con al menos 3 elementos y cumpliendo restricciones
+    resultado = []
+    for r in range(3, len(combinados) + 1):
+        for comb in combinations(combinados, r):
+            # Verificar que la combinación tenga al menos un elemento con 't' y uno con 't+1'
+            if any(elem in arreglo1 for elem in comb) and any(elem in arreglo2 for elem in comb):
+                resultado.append(list(comb))
+
+    # Mostrar la cantidad total de combinaciones y algunos ejemplos
+    print(f"Se generaron {len(resultado)} combinaciones únicas que cumplen con las restricciones.")
+    
+    return resultado
+
+def main_sustentacion():
+    combinaciones = generar_combinaciones()
+    results = []
+    for i in combinaciones:
+        present_subsystem, future_subsystem, _ = set_to_binary(['a_t', 'b_t', 'c_t', 'd_t', 'e_t', 'f_t', 'a_t+1', 'b_t+1', 'c_t+1', 'd_t+1', 'e_t+1', 'f_t+1'],i)
+        values = main_2('100010', '111111', present_subsystem, future_subsystem)
+        values.append(i)
+        results.append(values)
+        
+    with open('resultados_sustentacion.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["particion", "EMD", "Tiempo", "combinacion"])  # Encabezados
+        for fila in results:
+            writer.writerow([", ".join(fila[0]), fila[1], fila[2], fila[3]])
+
+    # print(f"Total de combinaciones: {len(combinaciones)}"
+main_sustentacion()

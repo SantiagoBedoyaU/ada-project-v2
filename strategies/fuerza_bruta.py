@@ -279,9 +279,6 @@ def bipartition_system(
     candidates_bipartition: list,
     node_state: dict,
 ):
-    if len(v) <= 2:
-        candidates_bipartition.append(v[-1])
-        return candidates_bipartition
     w_1 = [v[0]]
     w_1l = []
     wp = [item for item in v if item not in w_1]
@@ -534,7 +531,6 @@ def min_EMD(
 
 # caso de prueba red 10
 def main():
-    inicio = time.perf_counter()
     [
         initial_state_str,
         candidate_system_str,
@@ -567,6 +563,8 @@ def main():
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_9)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_10)
 
+    print("already started")
+    inicio = time.perf_counter()
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
     
     v = build_v(present_subsystem, future_subsystem)
