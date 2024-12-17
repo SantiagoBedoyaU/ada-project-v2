@@ -165,22 +165,17 @@ def tensor_product(df1: pd.DataFrame, df2: pd.DataFrame, keys_df1: list, keys_df
             col_key = "".join(map(str, labels_copy))
             temp_data.setdefault(row_key, {})[col_key] = result
     
-    # for elem in sorted(products.keys()):
-    #     df_result[elem] = pd.Series(products[elem])
-    
     df_result = pd.DataFrame.from_dict(temp_data, orient="index").fillna(0)
     df_result = reorder_little_endian(df_result)
     return df_result
 
 def tensor_product_of_matrix(df1: pd.DataFrame, df2: pd.DataFrame):
-    # Diccionario para almacenar columnas temporalmente
     result_dict = {}
     for df2col in df2.columns:
         for df1col in df1.columns:
             name = f"{df1col}{df2col}"
             result_dict[name] = df1[df1col] * df2[df2col]
 
-    # Crear el dataframe de una vez usando pd.DataFrame
     result = pd.DataFrame(result_dict)
     return result
 
@@ -603,7 +598,7 @@ def main():
     print("Tiempo=")
     print(fin-inicio)
 
-# casos de prueba primer excel 
+# casos de prueba red 5
 def main_2():
     inicio = time.perf_counter()
     [
@@ -627,7 +622,6 @@ def main_2():
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
 
-    # print(tensor_flow)
     print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
     
@@ -664,62 +658,62 @@ def main_2():
     fin = time.perf_counter()
     print("Tiempo=")
     print(fin-inicio)
-    
 
 ##############################################
 # Caso de prueba red 15
 ##############################################
-# inicio = time.perf_counter()
-# [
-#     initial_state_str,
-#     candidate_system_str,
-#     present_subsystem_str,
-#     future_subsystem_str,
-# ] = np.loadtxt("system_values_3.csv", delimiter=",", skiprows=1, dtype=str)
-# initial_state = initial_state_str.strip()
-# candidate_system = candidate_system_str.strip()
-# present_subsystem = present_subsystem_str.strip()
-# future_subsystem = future_subsystem_str.strip()
-# matrix, states = load_tpm("resultado_15.csv", len(candidate_system))
+def main_3():
+    inicio = time.perf_counter()
+    [
+        initial_state_str,
+        candidate_system_str,
+        present_subsystem_str,
+        future_subsystem_str,
+    ] = np.loadtxt("system_values_3.csv", delimiter=",", skiprows=1, dtype=str)
+    initial_state = initial_state_str.strip()
+    candidate_system = candidate_system_str.strip()
+    present_subsystem = present_subsystem_str.strip()
+    future_subsystem = future_subsystem_str.strip()
+    matrix, states = load_tpm("resultado_15.csv", len(candidate_system))
 
 
-# # print(tensor_flow)
-# print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
-# df_tpm = apply_background(matrix, initial_state, candidate_system)
-# # print(df_tpm)
+    # print(tensor_flow)
+    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
+    df_tpm = apply_background(matrix, initial_state, candidate_system)
+    # print(df_tpm)
 
-# v = build_v(present_subsystem, future_subsystem)
+    v = build_v(present_subsystem, future_subsystem)
 
-# global global_v 
+    global global_v 
 
-# global_v = v.copy()
+    global_v = v.copy()
 
-# present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
-# result_df = marginalize_cols(df_tpm, future)
-# result_df = marginalize_rows(result_df, present)
+    present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+    result_df = marginalize_cols(df_tpm, future)
+    result_df = marginalize_rows(result_df, present)
 
-# node_states = get_matrices_node_state(result_df)
+    node_states = get_matrices_node_state(result_df)
 
 
-# candidates_bipartition = []
-# candidate_bipartitions = bipartition_system(
-#     result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
-# )
-# print(f"{candidate_bipartitions=}")
-# initial_state_v, _ = set_to_binary(global_v, v)
-# present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-# sorted_idx = sorted(present_idx.keys())
-# label = ""
-# for idx in sorted_idx:
-#     label += initial_state[idx]
-    
-# [min_emd_key, min_emd_result] = min_EMD(
-#     result_df.copy(), v.copy(), candidate_bipartitions, label
-# )
-# print(f"{min_emd_key=}, {min_emd_result=}")
-# fin = time.perf_counter()
-# print("Tiempo=")
-# print(fin-inicio)
+    candidates_bipartition = []
+    candidate_bipartitions = bipartition_system(
+        result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
+    )
+    print(f"{candidate_bipartitions=}")
+    initial_state_v, _ = set_to_binary(global_v, v)
+    present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
+    sorted_idx = sorted(present_idx.keys())
+    label = ""
+    for idx in sorted_idx:
+        label += initial_state[idx]
+        
+    [min_emd_key, min_emd_result] = min_EMD(
+        result_df.copy(), v.copy(), candidate_bipartitions, label
+    )
+    print(f"{min_emd_key=}, {min_emd_result=}")
+    fin = time.perf_counter()
+    print("Tiempo=")
+    print(fin-inicio)
 
 async def solve(
     tpms: list[UploadFile], 

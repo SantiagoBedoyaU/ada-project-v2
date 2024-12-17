@@ -1,10 +1,12 @@
 from fastapi import UploadFile
 from pyemd import emd
 from numpy.typing import NDArray
+from itertools import combinations
 import numpy as np
 import pandas as pd
 import string
 import time
+import csv
 
 def load_tpm(filename_tpm: str, num_elements: int):
     states = pd.Index(
@@ -278,13 +280,8 @@ def bipartition_system(
     initial_state: str,
     candidates_bipartition: list,
     node_state: dict,
+    subsystem: list
 ):
-    w_1 = [v[0]]
-    w_1l = []
-    wp = [item for item in v if item not in w_1]
-
-    results_u = {}
-    
     present_v, _, _ = set_to_binary(global_v, v)
     present_idx = {idx: bit for idx, bit in enumerate(present_v) if bit == "1"}
     sorted_idx = sorted(present_idx.keys())
@@ -293,83 +290,33 @@ def bipartition_system(
         label += initial_state[idx]
     
     initial_state_values = df_tpm.loc[label, :].values
+    tuple_combinations = generate_subsystem_combinations(subsystem)
+    list_combinations = [list(combinacion) for combinacion in tuple_combinations]
     
-    while len(wp) > 0:
-        for u in wp:
-            w_1u = w_1.copy()
-            w_1u.append(u)
-            w_1up = [item for item in v if item not in w_1u]
-            
-            #----------------MARGINALIZACION W_1U ----------------
-            present, future, set_m_w1 = set_to_binary(global_v, w_1u)
-            marginalizacionW_1u = marginalize_node_states(
-                df_tpm, present, future, node_state, initial_state, set_m_w1
-            )
-            #----------------MARGINALIZACION W_1UP--------------
-            present, future, set_m_wp = set_to_binary(global_v, w_1up)
-            marginalizacionW_1up = marginalize_node_states(
-                df_tpm, present, future, node_state, initial_state, set_m_wp
-            )
-            #----------------TENSOR_PRODUCT---------------------
-            first_product_result = tensor_product(
-                marginalizacionW_1u, marginalizacionW_1up, set_m_w1, set_m_wp
-            )
-            #----------------FIRST_EMD---------------------
-            first_product_result = np.array(first_product_result).flatten().astype(np.float64)
-            initial_state_values = np.array(initial_state_values).astype(np.float64)   
-            emd1 = EMD(first_product_result, initial_state_values)
-            #------------- MARGINALIZACION U ---------------
-            up = [item for item in v if item not in [u]]
-            present, future, set_mu = set_to_binary(global_v, [u])
-            
-            marginalizacionU = marginalize_node_states(
-                df_tpm, present, future, node_state, initial_state, set_mu
-            )
-            #----------------MARGINALIZACIÓN UP ----------------
-            present, future, set_mp = set_to_binary(global_v, up)
-            marginalizacionUp = marginalize_node_states(
-                df_tpm, present, future, node_state, initial_state, set_mp
-            )
-            #----------------TENSOR_PRODUCT---------------------
-            second_product_result = tensor_product(
-                marginalizacionU, marginalizacionUp, set_mu, set_mp
-            )
-            #----------------SECOND_EMD---------------------
-            second_product_result = np.array(second_product_result).flatten().astype(np.float64)
-            emd2 = EMD(second_product_result, initial_state_values)
-            result_emd = emd1 - emd2
-
-            if isinstance(u, list):
-                results_u[tuple(u)] = result_emd
-            else:
-                results_u[u] = result_emd
-
-        #-------------------RESULTS--------------------
-        min_result = min(results_u.values())
-        key = [key for key, value in results_u.items() if value == min_result][0]
-        if isinstance(key, tuple):
-            key = list(key)
-        wp.remove(key)
-        w_1.append(key)
-        w_1l.append(key)
-        results_u.clear()
-
-    candidates_bipartition.append(w_1l[-1])
-    v.remove(w_1l[-1])
-    v.remove(w_1l[-2])
-    if isinstance(w_1l[-1], list) and isinstance(w_1l[-2], list):
-        v.append(w_1l[-1] + w_1l[-2])
-
-    elif isinstance(w_1l[-2], list):
-        v.append([w_1l[-1]] + w_1l[-2])
-
-    elif isinstance(w_1l[-1], list):
-        v.append(w_1l[-1] + [w_1l[-2]])
-    else:
-        v.append([w_1l[-1], w_1l[-2]])
-    candidates_bipartition = bipartition_system(
-        df_tpm, v, initial_state, candidates_bipartition, node_state
-    )
+    # For sobre cada combinación posible del subsistema dado
+    for combination in list_combinations:
+        #----------------MARGINALIZACION W_1U ----------------
+        present, future, set_m_w1 = set_to_binary(global_v, combination)
+        marginalizacionW_1u = marginalize_node_states(
+            df_tpm, present, future, node_state, initial_state, set_m_w1
+        )
+        w_1up = [item for item in v if item not in combination]
+        #----------------MARGINALIZACION W_1UP--------------
+        present, future, set_m_wp = set_to_binary(global_v, w_1up)
+        marginalizacionW_1up = marginalize_node_states(
+            df_tpm, present, future, node_state, initial_state, set_m_wp
+        )
+        #----------------TENSOR_PRODUCT---------------------
+        first_product_result = tensor_product(
+            marginalizacionW_1u, marginalizacionW_1up, set_m_w1, set_m_wp
+        )
+        #----------------FIRST_EMD---------------------
+        first_product_result = np.array(first_product_result).flatten().astype(np.float64)
+        initial_state_values = np.array(initial_state_values).astype(np.float64)   
+        emd = EMD(first_product_result, initial_state_values)
+        if emd < candidates_bipartition[1]:
+            candidates_bipartition[0] = combination
+            candidates_bipartition[1] = emd
     return candidates_bipartition
 
 def set_to_binary_1(set: list, present_label_len: int, future_label_len: int):
@@ -529,105 +476,52 @@ def min_EMD(
     ][0]
     return [min_emd_key, min_emd_result]
 
-# caso de prueba red 10
-def main():
-    [
-        initial_state_str,
-        candidate_system_str,
-        present_subsystem_str,
-        future_subsystem_str,
-    ] = np.loadtxt("./red10/system_values.csv", delimiter=",", skiprows=1, dtype=str)
-    initial_state = initial_state_str.strip()
-    candidate_system = candidate_system_str.strip()
-    present_subsystem = present_subsystem_str.strip()
-    future_subsystem = future_subsystem_str.strip()
-    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
-    matrix_1, _ = load_tpm_2("./red10/state_node_a.csv", len(candidate_system))
-    matrix_2, _ = load_tpm_2("./red10/state_node_b.csv", len(candidate_system))
-    matrix_3, _ = load_tpm_2("./red10/state_node_c.csv", len(candidate_system))
-    matrix_4, _ = load_tpm_2("./red10/state_node_d.csv", len(candidate_system))
-    matrix_5, _ = load_tpm_2("./red10/state_node_e.csv", len(candidate_system))
-    matrix_6, _ = load_tpm_2("./red10/state_node_f.csv", len(candidate_system))
-    matrix_7, _ = load_tpm_2("./red10/state_node_g.csv", len(candidate_system))
-    matrix_8, _ = load_tpm_2("./red10/state_node_h.csv", len(candidate_system))
-    matrix_9, _ = load_tpm_2("./red10/state_node_i.csv", len(candidate_system))
-    matrix_10, _ = load_tpm_2("./red10/state_node_j.csv", len(candidate_system))
+def initial_background(initial_state, candidate_system):
+    matrix_1, _ = load_tpm_2("./red6/state_node_a.csv", len(candidate_system))
+    matrix_2, _ = load_tpm_2("./red6/state_node_b.csv", len(candidate_system))
+    matrix_3, _ = load_tpm_2("./red6/state_node_c.csv", len(candidate_system))
+    matrix_4, _ = load_tpm_2("./red6/state_node_d.csv", len(candidate_system))
+    matrix_5, _ = load_tpm_2("./red6/state_node_e.csv", len(candidate_system))
+    matrix_6, _ = load_tpm_2("./red6/state_node_f.csv", len(candidate_system))
     
     tensor_flow = tensor_product_of_matrix(matrix_1, matrix_2)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_6)
-    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_7)
-    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_8)
-    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_9)
-    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_10)
-
-    print("already started")
-    inicio = time.perf_counter()
+    
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
+    return df_tpm
+
+def generate_combinations():
+    # Arreglos iniciales (se pueden modificar)
+    array1 = ['a_t', 'b_t', 'c_t', 'd_t', 'e_t', 'f_t']
+    array2 = ['a_t+1', 'b_t+1', 'c_t+1', 'd_t+1', 'e_t+1', 'f_t+1']
+
+    combinated = array1 + array2
+
+    result = []
+    for r in range(3, len(combinated) + 1):
+        for comb in combinations(combinated, r):
+            if any(elem in array1 for elem in comb) and any(elem in array2 for elem in comb):
+                result.append(list(comb))
+    return result
+
+def generate_subsystem_combinations(subsystem: list):
+    all_combinations = []
+    n = len(subsystem)
+    for i in range(1, n):  # Excluye n
+        combinations_list = combinations(subsystem, i)
+        all_combinations.extend(combinations_list)
     
-    v = build_v(present_subsystem, future_subsystem)
+    return all_combinations
 
-    global global_v 
-    global_v = v.copy()
-    global marginalized_tpm
-    marginalized_tpm = {}
-    
-    present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
-
-    node_states = get_first_matrices_node_state(df_tpm)
-
-    result_df = marginalize_node_states_1(df_tpm, present, future, node_states, sorted(node_states.keys()))
-    result_df = marginalize_cols(result_df, future)
-    node_states = get_matrices_node_state(result_df, future)
-    
-    candidates_bipartition = []
-    candidate_bipartitions = bipartition_system(
-        result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
-    )
-    initial_state_v, _, _ = set_to_binary(global_v, v)
-    present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-    sorted_idx = sorted(present_idx.keys())
-    label = ""
-    for idx in sorted_idx:
-        label += initial_state[idx]
-        
-    [min_emd_key, min_emd_result] = min_EMD(
-        result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
-    )
-    print(f"{min_emd_key=}, {min_emd_result=}")
-    fin = time.perf_counter()
-    print("Tiempo=")
-    print(fin-inicio)
-
-# casos de prueba primer excel 
-def main_2():
+# Main para generar automáticamente las particiones
+def main_2(initial_state_str, present_subsystem_str, future_subsystem_str, df_tpm, i):
     inicio = time.perf_counter()
-    [
-        initial_state_str,
-        candidate_system_str,
-        present_subsystem_str,
-        future_subsystem_str,
-    ] = np.loadtxt("./red5/system_values.csv", delimiter=",", skiprows=1, dtype=str)
     initial_state = initial_state_str.strip()
-    candidate_system = candidate_system_str.strip()
     present_subsystem = present_subsystem_str.strip()
     future_subsystem = future_subsystem_str.strip()
-    matrix_1, _ = load_tpm_2("./red5/state_node_a.csv", len(candidate_system))
-    matrix_2, _ = load_tpm_2("./red5/state_node_b.csv", len(candidate_system))
-    matrix_3, _ = load_tpm_2("./red5/state_node_c.csv", len(candidate_system))
-    matrix_4, _ = load_tpm_2("./red5/state_node_d.csv", len(candidate_system))
-    matrix_5, _ = load_tpm_2("./red5/state_node_e.csv", len(candidate_system))
-    
-    tensor_flow = tensor_product_of_matrix(matrix_1, matrix_2)
-    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_3)
-    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_4)
-    tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
-
-    # print(tensor_flow)
-    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
-    df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
     
     v = build_v(present_subsystem, future_subsystem)
 
@@ -644,80 +538,31 @@ def main_2():
     result_df = marginalize_cols(result_df, future)
     node_states = get_matrices_node_state(result_df, future)
     
-    candidates_bipartition = []
+    candidates_bipartition = [[], 1000]
     candidate_bipartitions = bipartition_system(
-        result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
+        result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states, i
     )
-    initial_state_v, _, _ = set_to_binary(global_v, v)
-    present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-    sorted_idx = sorted(present_idx.keys())
-    label = ""
-    for idx in sorted_idx:
-        label += initial_state[idx]
-        
-    [min_emd_key, min_emd_result] = min_EMD(
-        result_df.copy(), v.copy(), candidate_bipartitions, label, node_states, initial_state
-    )
-    print(f"{min_emd_key=}, {min_emd_result=}")
     fin = time.perf_counter()
     print("Tiempo=")
     print(fin-inicio)
-    
+    return [candidate_bipartitions[0], candidate_bipartitions[1], fin-inicio]
 
-##############################################
-# Caso de prueba red 15
-##############################################
-# inicio = time.perf_counter()
-# [
-#     initial_state_str,
-#     candidate_system_str,
-#     present_subsystem_str,
-#     future_subsystem_str,
-# ] = np.loadtxt("system_values_3.csv", delimiter=",", skiprows=1, dtype=str)
-# initial_state = initial_state_str.strip()
-# candidate_system = candidate_system_str.strip()
-# present_subsystem = present_subsystem_str.strip()
-# future_subsystem = future_subsystem_str.strip()
-# matrix, states = load_tpm("resultado_15.csv", len(candidate_system))
-
-
-# # print(tensor_flow)
-# print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
-# df_tpm = apply_background(matrix, initial_state, candidate_system)
-# # print(df_tpm)
-
-# v = build_v(present_subsystem, future_subsystem)
-
-# global global_v 
-
-# global_v = v.copy()
-
-# present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
-# result_df = marginalize_cols(df_tpm, future)
-# result_df = marginalize_rows(result_df, present)
-
-# node_states = get_matrices_node_state(result_df)
-
-
-# candidates_bipartition = []
-# candidate_bipartitions = bipartition_system(
-#     result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
-# )
-# print(f"{candidate_bipartitions=}")
-# initial_state_v, _ = set_to_binary(global_v, v)
-# present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-# sorted_idx = sorted(present_idx.keys())
-# label = ""
-# for idx in sorted_idx:
-#     label += initial_state[idx]
-    
-# [min_emd_key, min_emd_result] = min_EMD(
-#     result_df.copy(), v.copy(), candidate_bipartitions, label
-# )
-# print(f"{min_emd_key=}, {min_emd_result=}")
-# fin = time.perf_counter()
-# print("Tiempo=")
-# print(fin-inicio)
+def main_sustentacion():
+    combinations = generate_combinations()
+    results = []
+    df_tpm = initial_background('100010', '111111')
+    for idx, i in enumerate(combinations):
+        # print(idx)
+        present_subsystem, future_subsystem, _ = set_to_binary(['a_t', 'b_t', 'c_t', 'd_t', 'e_t', 'f_t', 'a_t+1', 'b_t+1', 'c_t+1', 'd_t+1', 'e_t+1', 'f_t+1'],i) #Se puede modificar
+        values = main_2('100010', present_subsystem, future_subsystem, df_tpm, i)
+        values.append(i)
+        results.append(values)
+        
+    with open('resultado_fuerza_bruta.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["particion", "EMD", "Tiempo", "combinacion"])  # Encabezados
+        for fila in results:
+            writer.writerow([", ".join(fila[0]), fila[1], fila[2], fila[3]])
 
 async def solve(
     tpms: list[UploadFile], 
@@ -770,4 +615,4 @@ async def solve(
     )
     return [min_emd_key, min_emd_result, fin-inicio]
     
-# main()
+# main_sustentacion()

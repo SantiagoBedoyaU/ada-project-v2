@@ -1,6 +1,7 @@
 from fastapi import UploadFile
 from pyemd import emd
 from numpy.typing import NDArray
+from itertools import combinations
 import numpy as np
 import pandas as pd
 import string
@@ -757,7 +758,20 @@ def build_v(present_subsystem: str, future_subsystem: str):
             v.append(f"{abc[idx]}_t+1")
     return v
 
-# caso de prueba red 10
+def generate_combinations():
+    array1 = ['a_t', 'b_t', 'c_t', 'd_t', 'e_t', 'f_t']
+    array2 = ['a_t+1', 'b_t+1', 'c_t+1', 'd_t+1', 'e_t+1', 'f_t+1']
+
+    combinated = array1 + array2
+
+    result = []
+    for r in range(3, len(combinated) + 1):
+        for comb in combinations(combinated, r):
+            if any(elem in array1 for elem in comb) and any(elem in array2 for elem in comb):
+                result.append(list(comb))
+    return result
+
+# Casos de prueba red 10
 def main():
     inicio = time.perf_counter()
     [
@@ -822,7 +836,7 @@ def main():
     print("Tiempo=")
     print(fin-inicio)
 
-# casos de prueba primer excel 
+# Main para generar automáticamente las particiones
 def main_2(initial_state_str, candidate_system_str, present_subsystem_str, future_subsystem_str,):
     initial_state = initial_state_str.strip()
     candidate_system = candidate_system_str.strip()
@@ -841,7 +855,7 @@ def main_2(initial_state_str, candidate_system_str, present_subsystem_str, futur
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_5)
     tensor_flow = tensor_product_of_matrix(tensor_flow, matrix_6)
 
-    # print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
+    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
     df_tpm = apply_background(tensor_flow, initial_state, candidate_system)
     
     v = build_v(present_subsystem, future_subsystem)
@@ -874,64 +888,62 @@ def main_2(initial_state_str, candidate_system_str, present_subsystem_str, futur
     ic(bestEMD)
     
     fin = time.perf_counter()
-    # print("Tiempo=")
-    # print(fin-inicio)
+    print("Tiempo=")
+    print(fin-inicio)
     return [str(value), bestEMD, fin-inicio]
 
 ##############################################
 # Caso de prueba red 15
 ##############################################
-# inicio = time.perf_counter()
-# [
-#     initial_state_str,
-#     candidate_system_str,
-#     present_subsystem_str,
-#     future_subsystem_str,
-# ] = np.loadtxt("system_values_3.csv", delimiter=",", skiprows=1, dtype=str)
-# initial_state = initial_state_str.strip()
-# candidate_system = candidate_system_str.strip()
-# present_subsystem = present_subsystem_str.strip()
-# future_subsystem = future_subsystem_str.strip()
-# matrix, states = load_tpm("resultado_15.csv", len(candidate_system))
+def main_3():
+    inicio = time.perf_counter()
+    [
+        initial_state_str,
+        candidate_system_str,
+        present_subsystem_str,
+        future_subsystem_str,
+    ] = np.loadtxt("system_values_3.csv", delimiter=",", skiprows=1, dtype=str)
+    initial_state = initial_state_str.strip()
+    candidate_system = candidate_system_str.strip()
+    present_subsystem = present_subsystem_str.strip()
+    future_subsystem = future_subsystem_str.strip()
+    matrix, states = load_tpm("resultado_15.csv", len(candidate_system))
 
+    print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
+    df_tpm = apply_background(matrix, initial_state, candidate_system)
 
-# # print(tensor_flow)
-# print(f"{initial_state=}, {candidate_system=}, {present_subsystem=}, {future_subsystem=}")
-# df_tpm = apply_background(matrix, initial_state, candidate_system)
-# # print(df_tpm)
+    v = build_v(present_subsystem, future_subsystem)
 
-# v = build_v(present_subsystem, future_subsystem)
+    global global_v 
+    global_v = v.copy()
 
-# global global_v 
+    present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
+    result_df = marginalize_cols(df_tpm, future)
+    result_df = marginalize_rows(result_df, present)
 
-# global_v = v.copy()
+    node_states = get_matrices_node_state(result_df)
+    candidates_bipartition = []
+    candidate_bipartitions = bipartition_system(
+        result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
+    )
+    fin = time.perf_counter()
+    print("Tiempo=")
+    print(fin-inicio)
 
-# present, future = set_to_binary_1(v, len(df_tpm.index[0]), len(df_tpm.columns[0]))
-# result_df = marginalize_cols(df_tpm, future)
-# result_df = marginalize_rows(result_df, present)
-
-# node_states = get_matrices_node_state(result_df)
-
-
-# candidates_bipartition = []
-# candidate_bipartitions = bipartition_system(
-#     result_df.copy(), v.copy(), initial_state, candidates_bipartition, node_states
-# )
-# print(f"{candidate_bipartitions=}")
-# initial_state_v, _ = set_to_binary(global_v, v)
-# present_idx = {idx: bit for idx, bit in enumerate(initial_state_v) if bit == "1"}
-# sorted_idx = sorted(present_idx.keys())
-# label = ""
-# for idx in sorted_idx:
-#     label += initial_state[idx]
-    
-# [min_emd_key, min_emd_result] = min_EMD(
-#     result_df.copy(), v.copy(), candidate_bipartitions, label
-# )
-# print(f"{min_emd_key=}, {min_emd_result=}")
-# fin = time.perf_counter()
-# print("Tiempo=")
-# print(fin-inicio)
+def main_sustentacion():
+    list_combinations = generate_combinations()
+    results = []
+    for i in list_combinations:
+        present_subsystem, future_subsystem, _ = set_to_binary(['a_t', 'b_t', 'c_t', 'd_t', 'e_t', 'f_t', 'a_t+1', 'b_t+1', 'c_t+1', 'd_t+1', 'e_t+1', 'f_t+1'],i)
+        values = main_2('100010', '111111', present_subsystem, future_subsystem)
+        values.append(i)
+        results.append(values)
+        
+    with open('resultados_sustentacion.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["particion", "EMD", "Tiempo", "combinacion"])  # Encabezados
+        for fila in results:
+            writer.writerow([", ".join(fila[0]), fila[1], fila[2], fila[3]])
 
 async def solve(
     tpms: list[UploadFile], 
@@ -979,45 +991,5 @@ async def solve(
     ic(value, len(value))
     ic(bestEMD)
     return [value, bestEMD, fin-inicio]
-# main()
 
-from itertools import combinations
-
-def generar_combinaciones():
-    # Arreglos iniciales
-    arreglo1 = ['a_t', 'b_t', 'c_t', 'd_t', 'e_t', 'f_t']
-    arreglo2 = ['a_t+1', 'b_t+1', 'c_t+1', 'd_t+1', 'e_t+1', 'f_t+1']
-
-    # Combinar ambos arreglos en uno solo
-    combinados = arreglo1 + arreglo2
-
-    # Generar todas las combinaciones únicas con al menos 3 elementos y cumpliendo restricciones
-    resultado = []
-    for r in range(3, len(combinados) + 1):
-        for comb in combinations(combinados, r):
-            # Verificar que la combinación tenga al menos un elemento con 't' y uno con 't+1'
-            if any(elem in arreglo1 for elem in comb) and any(elem in arreglo2 for elem in comb):
-                resultado.append(list(comb))
-
-    # Mostrar la cantidad total de combinaciones y algunos ejemplos
-    print(f"Se generaron {len(resultado)} combinaciones únicas que cumplen con las restricciones.")
-    
-    return resultado
-
-def main_sustentacion():
-    combinaciones = generar_combinaciones()
-    results = []
-    for i in combinaciones:
-        present_subsystem, future_subsystem, _ = set_to_binary(['a_t', 'b_t', 'c_t', 'd_t', 'e_t', 'f_t', 'a_t+1', 'b_t+1', 'c_t+1', 'd_t+1', 'e_t+1', 'f_t+1'],i)
-        values = main_2('100010', '111111', present_subsystem, future_subsystem)
-        values.append(i)
-        results.append(values)
-        
-    with open('resultados_sustentacion.csv', 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(["particion", "EMD", "Tiempo", "combinacion"])  # Encabezados
-        for fila in results:
-            writer.writerow([", ".join(fila[0]), fila[1], fila[2], fila[3]])
-
-    # print(f"Total de combinaciones: {len(combinaciones)}"
-main_sustentacion()
+# main_sustentacion()

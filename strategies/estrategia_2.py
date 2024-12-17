@@ -1068,7 +1068,7 @@ def count_bipartite_graph_components(adjacency_matrix):
             components.append(current_component)
     return len(components), components
 
-# Estrategia 2: Primer excel
+# Estrategia 2: Red 5
 def main_proof_cases():
     [
         initial_state_str,
